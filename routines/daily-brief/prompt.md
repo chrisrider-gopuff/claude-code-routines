@@ -1,6 +1,6 @@
 # Daily Brief Routine
 
-Run this routine every weekday at 4:45 PM Eastern time.
+Run this routine every weekday at 1:00 AM Eastern time.
 
 ## What to do
 

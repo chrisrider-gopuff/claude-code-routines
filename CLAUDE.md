@@ -6,7 +6,7 @@ This repository contains scheduled Claude Code routines that run automatically.
 
 ### daily-brief
 
-**Schedule:** Weekdays at 4:45 PM Eastern (America/New_York)  
+**Schedule:** Weekdays at 1:00 AM Eastern (America/New_York)  
 **Prompt:** `routines/daily-brief/prompt.md`  
 **Config:** `routines/daily-brief/schedule.yaml`
 
