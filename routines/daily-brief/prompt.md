@@ -4,7 +4,7 @@ Run this routine every weekday at 1:00 AM Eastern time.
 
 ## What to do
 
-1. Determine today's date and find the **next weekday** (Mon–Fri) — that is the target date for the calendar event. "Next weekday" means the very next Mon–Fri calendar day (Thursday → Friday, Friday → Monday, etc.).
+1. Determine today's date (the weekday this routine is running on).
 
 2. Sweep the last 7 days of **Gmail** and **Slack** using the steps below.
 
@@ -14,7 +14,7 @@ Run this routine every weekday at 1:00 AM Eastern time.
 
 5. Create a single **Google Calendar event**:
    - Title: `Daily Brief`
-   - Date: the next weekday (computed in step 1)
+   - Date: today (the same weekday this routine is running on)
    - Time: 9:00 AM – 9:15 AM Eastern
    - Description: formatted output (see Format section below)
    - Not recurring
@@ -32,7 +32,7 @@ Search Gmail for threads from the last 7 days. Focus on:
 **B. Self-authored notes-to-self**
 Search for:
 - `from:me to:me` (sent-to-self emails)
-- Subjects matching: `1:1`, `sync`, `notes`, `weekly`, `debrief`, `meeting notes`, `recap`
+- Subjects matching: `1:1`, `sync`, `notes`, `weekly`, `debrief`
 
 For each self-authored note, extract individual action items (bulleted lists, tasks, "TODO", "follow up", "need to", "action item", "AI:" prefixes, etc.). For each action item, check whether it appears to have been completed by looking for:
 - Later Gmail replies or new threads referencing that item
@@ -47,7 +47,7 @@ Include only open (not yet completed) action items as individual follow-up entri
 - ❌ Any email where the sender is `support@yardstik.com` (Yardstik direct emails). If a Gopuff employee forwarded or referenced a Yardstik matter in their own email, that may be included.
 - ❌ Emails labeled "Workers Comp" where I am only CC'd and have NOT personally replied anywhere in that thread.
 - ❌ Emails from Michelle Carlson with "Litigation Hold" in the subject line where I am BCC'd.
-- ❌ Emails with the exact subject "Real Estate Request" (any variation).
+- ❌ Emails with the subject "Real Estate Request" (any variation).
 
 ---
 
