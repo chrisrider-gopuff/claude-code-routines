@@ -37,6 +37,8 @@ Search for:
 For each self-authored note, extract individual action items (bulleted lists, tasks, "TODO", "follow up", "need to", "action item", "AI:" prefixes, etc.). For each action item, check whether it appears to have been completed by looking for:
 - Later Gmail replies or new threads referencing that item
 - Slack messages referencing it
+- Google Calendar events that correspond to the item (e.g., a meeting was scheduled)
+- Google Drive file activity referencing it (e.g., a doc was created or updated)
 - Any other evidence of completion
 
 Include only open (not yet completed) action items as individual follow-up entries.
