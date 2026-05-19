@@ -1,12 +1,12 @@
-# Daily Brief Routine
+# Daily Brief
 
-Run this routine every weekday at 1:00 AM Eastern time.
+You are executing the Daily Brief routine right now. Complete every step below in order. Do not stop to verify configuration or ask for confirmation — just do the work.
 
-## What to do
+## Steps
 
-1. Determine today's date (the weekday this routine is running on).
+1. Note today's date (the date this routine is running on).
 
-2. Sweep the last 7 days of **Gmail** and **Slack** using the steps below.
+2. Sweep the last 7 days of **Gmail** and **Slack** using the source instructions below.
 
 3. Apply all filtering rules to eliminate noise.
 
@@ -14,7 +14,7 @@ Run this routine every weekday at 1:00 AM Eastern time.
 
 5. Create a single **Google Calendar event**:
    - Title: `Daily Brief`
-   - Date: today (the same weekday this routine is running on)
+   - Date: today (the same date this routine is running on)
    - Time: 9:00 AM – 9:15 AM Eastern
    - Description: formatted output (see Format section below)
    - Not recurring
