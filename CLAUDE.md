@@ -10,7 +10,14 @@ This repository contains scheduled Claude Code routines that run automatically.
 **Prompt:** `routines/daily-brief/prompt.md`  
 **Config:** `routines/daily-brief/schedule.yaml`
 
-Sweeps the past 7 days of Gmail and Slack, identifies open follow-up items, and creates a 15-minute Google Calendar event called "Daily Brief" on the next weekday at 9:00–9:15 AM Eastern. The event description groups items into Urgent, Active, and Monitoring sections.
+Sweeps the past 7 days of Gmail and Slack, identifies open follow-up items, and creates a 15-minute Google Calendar event called "Daily Brief" for the same day at 9:00–9:15 AM Eastern. The event description groups items into Urgent, Active, and Monitoring sections.
+
+**Sources swept:**
+1. Gmail threads where someone is waiting on me or I owe a response
+2. Slack DMs, group DMs, and channel @mentions where a response is pending
+3. Self-authored Gmail notes-to-self (`from:me to:me`, or subjects matching `1:1`, `sync`, `notes`, `weekly`, `debrief`) — action items are extracted individually and only surfaced if not yet completed
+
+Items that appear in multiple sources are consolidated into a single entry with sub-bullets for each distinct next action.
 
 **Required MCP integrations:**
 - Gmail (read threads, search)
