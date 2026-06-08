@@ -12,7 +12,7 @@ You are executing the Daily Brief routine right now. Complete every step below i
 
 4. Consolidate items: when the same underlying matter appears in multiple sources (e.g., a Slack DM and a Gmail thread, or a Slack DM and a self-authored note), merge them into a single entry with sub-bullets for each distinct next action.
 
-5. Send a **Slack DM to me** (user ID: `U0AHNL8LD53`) with the formatted output (see Format section below).
+5. Send a message to the **#morning-briefing** Slack channel with the formatted output (see Format section below).
 
 ---
 

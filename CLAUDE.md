@@ -10,7 +10,7 @@ This repository contains scheduled Claude Code routines that run automatically.
 **Prompt:** `routines/daily-brief/prompt.md`  
 **Config:** `routines/daily-brief/schedule.yaml`
 
-Sweeps the past 7 days of Gmail and Slack, identifies open follow-up items, and sends a Slack DM to the user at 9:15 AM Eastern. The message groups items into Urgent, Active, and Monitoring sections.
+Sweeps the past 7 days of Gmail and Slack, identifies open follow-up items, and posts to the #morning-briefing Slack channel at 9:15 AM Eastern. The message groups items into Urgent, Active, and Monitoring sections.
 
 **Sources swept:**
 1. Gmail threads where someone is waiting on me or I owe a response
