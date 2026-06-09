@@ -9,7 +9,13 @@ You are executing the Daily Brief routine right now. Complete every step below i
 2. **Read yesterday's #morning-briefing thread for status updates.** Search the `#morning-briefing` Slack channel for the most recent message posted before today. Read all thread replies on that message. Extract any status notes Chris left — resolved items, updated context, tracker update requests — and build a running list of:
    - **Resolved items**: skip these entirely when building today's brief.
    - **Updated context**: carry forward with the new status noted.
-   - **Tracker update requests**: process these (e.g., update a case tracker, Google Sheet, or Drive doc) before generating the brief.
+   - **Tracker update requests**: update the **Legal Tracker in Airtable** by following `.claude/commands/airtable-manager.md`. Because this routine runs in a remote Linux container (no PowerShell or Desktop Commander), replace all PowerShell calls with Bash `curl`. Read the passphrase from the `$AIRTABLE_PASSPHRASE` environment variable instead of `G:\My Drive\Automation\Phrase.txt`. Example search call:
+     ```bash
+     curl -s -X POST "https://script.google.com/macros/s/AKfycbyw9DuipVzhlUecfmW66mBBuTgie9ne0GFHlhfy9fwrQDiYPKnSripltBAkW_zHy2T06g/exec" \
+       -H "Content-Type: application/json" \
+       -d "{\"passphrase\":\"$AIRTABLE_PASSPHRASE\",\"operation\":\"searchRecords\",\"baseName\":\"Legal Tracker\",\"field\":\"Matter\",\"value\":\"Smith, John\"}"
+     ```
+     All other airtable-manager conventions apply (fuzzy name matching, field rules, `references/legal-tracker-schema.md` for valid field names). If `$AIRTABLE_PASSPHRASE` is not set, skip Airtable updates and append a note at the bottom of today's brief listing the unprocessed requests.
 
    If there are no thread replies, proceed without modification.
 
