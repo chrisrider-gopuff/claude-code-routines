@@ -6,13 +6,20 @@ You are executing the Daily Brief routine right now. Complete every step below i
 
 1. Note today's date (the date this routine is running on).
 
-2. Sweep the last 7 days of **Gmail** and **Slack** using the source instructions below.
+2. **Read yesterday's #morning-briefing thread for status updates.** Search the `#morning-briefing` Slack channel for the most recent message posted before today. Read all thread replies on that message. Extract any status notes Chris left — resolved items, updated context, tracker update requests — and build a running list of:
+   - **Resolved items**: skip these entirely when building today's brief.
+   - **Updated context**: carry forward with the new status noted.
+   - **Tracker update requests**: process these (e.g., update a case tracker, Google Sheet, or Drive doc) before generating the brief.
 
-3. Apply all filtering rules to eliminate noise.
+   If there are no thread replies, proceed without modification.
 
-4. Consolidate items: when the same underlying matter appears in multiple sources (e.g., a Slack DM and a Gmail thread, or a Slack DM and a self-authored note), merge them into a single entry with sub-bullets for each distinct next action.
+3. Sweep the last 7 days of **Gmail** and **Slack** using the source instructions below.
 
-5. Send a message to the **#morning-briefing** Slack channel with the formatted output (see Format section below).
+4. Apply all filtering rules to eliminate noise.
+
+5. Consolidate items: when the same underlying matter appears in multiple sources (e.g., a Slack DM and a Gmail thread, or a Slack DM and a self-authored note), merge them into a single entry with sub-bullets for each distinct next action.
+
+6. Send a message to the **#morning-briefing** Slack channel with the formatted output (see Format section below).
 
 ---
 
