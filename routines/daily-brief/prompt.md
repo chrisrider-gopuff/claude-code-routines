@@ -99,12 +99,18 @@ After collecting all Gmail and Slack items:
 
 🟡 Active Matters Needing Follow-Through
 
-[numbered list, same format]
+4. **[Bold Title]** — [summary]
+
+[repeat, continuing the number sequence from where 🔴 left off]
 
 📌 Monitoring/FYI
 
-[numbered list, same format]
+7. **[Bold Title]** — [summary]
+
+[repeat, continuing the number sequence from where 🟡 left off]
 ```
+
+Numbers run sequentially across all three sections — do not restart at 1 for each category.
 
 Each item must include:
 - The person(s) involved
