@@ -116,5 +116,6 @@ Each item must include:
 - The person(s) involved
 - What is outstanding
 - The specific next action needed from me
+- A source link — include a clickable link to the originating Gmail thread, Slack message/DM, or Google Calendar event. For Gmail threads use the format `https://mail.google.com/mail/u/0/#inbox/<threadId>`. For Slack messages use the permalink returned by the search or read tool. For calendar events use the Google Calendar event link if available. If an item is consolidated from multiple sources, include one link per source on separate sub-bullets.
 
 Omit any section that has no items.
