@@ -71,6 +71,21 @@ All payloads require `passphrase`, `operation`, and `baseName`. `tableName` is o
 ### List known bases
 `{"passphrase":"...","operation":"listBases"}`
 
+### Get schema (field names + select options for all tables in a base)
+`{"passphrase":"...","operation":"getSchema","baseName":"Legal Tracker"}`
+
+Returns an object keyed by table name. Each table is an array of field objects:
+```json
+{
+  "Cases": [
+    { "name": "Matter", "type": "singleLineText", "options": null },
+    { "name": "Claim Type", "type": "singleSelect", "options": ["Employment", "Workers Comp", "Personal Injury"] },
+    { "name": "Total Settlement", "type": "currency", "options": null }
+  ]
+}
+```
+Call this before any `createRecord` or `updateRecord` to verify exact field names and valid select option values. Field names are case-sensitive.
+
 ## Finding a record ID
 
 Use `searchRecords` on the `Matter` field first, then use the returned `recordId` for updates/deletes.
@@ -87,7 +102,7 @@ Apply fuzzy matching:
 
 ## Field reference
 
-Consult `references/legal-tracker-schema.md` for exact field names and valid option values. Key rules:
+Before any `createRecord` or `updateRecord`, call `getSchema` to retrieve current field names and valid select option values directly from Airtable. Do not guess field names. Key rules that apply regardless of schema:
 - Primary field is **`Matter`** (not "Name")
 - `Status` is a formula — do not include in writes
 - Currency fields take plain numbers, not strings

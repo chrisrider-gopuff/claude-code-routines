@@ -15,7 +15,13 @@ You are executing the Daily Brief routine right now. Complete every step below i
        -H "Content-Type: application/json" \
        -d "{\"passphrase\":\"$AIRTABLE_PASSPHRASE\",\"operation\":\"searchRecords\",\"baseName\":\"Legal Tracker\",\"field\":\"Matter\",\"value\":\"Smith, John\"}"
      ```
-     All other airtable-manager conventions apply (fuzzy name matching, field rules, `references/legal-tracker-schema.md` for valid field names). If `$AIRTABLE_PASSPHRASE` is not set, skip Airtable updates and append a note at the bottom of today's brief listing the unprocessed requests.
+     Before writing any record, call `getSchema` to retrieve current field names and valid select option values:
+     ```bash
+     curl -s -X POST "https://script.google.com/macros/s/AKfycbyw9DuipVzhlUecfmW66mBBuTgie9ne0GFHlhfy9fwrQDiYPKnSripltBAkW_zHy2T06g/exec" \
+       -H "Content-Type: application/json" \
+       -d "{\"passphrase\":\"$AIRTABLE_PASSPHRASE\",\"operation\":\"getSchema\",\"baseName\":\"Legal Tracker\"}"
+     ```
+     All other airtable-manager conventions apply (fuzzy name matching, field rules). If `$AIRTABLE_PASSPHRASE` is not set, skip Airtable updates and append a note at the bottom of today's brief listing the unprocessed requests.
 
    If there are no thread replies, proceed without modification.
 
