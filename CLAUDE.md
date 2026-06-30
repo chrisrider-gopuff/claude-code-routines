@@ -6,11 +6,11 @@ This repository contains scheduled Claude Code routines that run automatically.
 
 ### daily-brief
 
-**Schedule:** Weekdays at 9:15 AM Eastern (America/New_York)  
+**Schedule:** Weekdays at 8:00 AM Eastern (America/New_York)  
 **Prompt:** `routines/daily-brief/prompt.md`  
 **Config:** `routines/daily-brief/schedule.yaml`
 
-Sweeps the past 7 days of Gmail and Slack, identifies open follow-up items, and posts to the #morning-briefing Slack channel at 9:15 AM Eastern. The message groups items into Urgent, Active, and Monitoring sections.
+Sweeps the past 7 days of Gmail and Slack, identifies open follow-up items, and posts to the #morning-briefing Slack channel at 8:00 AM Eastern. The message groups items into Urgent, Active, and Monitoring sections.
 
 **Sources swept:**
 1. Gmail threads where someone is waiting on me or I owe a response
@@ -31,7 +31,7 @@ Items that appear in multiple sources are consolidated into a single entry with 
 
 ### meeting-brief
 
-**Schedule:** Weekdays at 7:00 AM Eastern (America/New_York)  
+**Schedule:** Weekdays at 8:00 AM Eastern (America/New_York)  
 **Prompt:** `routines/meeting-brief/prompt.md`  
 **Config:** `routines/meeting-brief/schedule.yaml`
 
