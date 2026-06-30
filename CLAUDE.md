@@ -29,6 +29,29 @@ Items that appear in multiple sources are consolidated into a single entry with 
 - Excludes Litigation Hold emails from Michelle Carlson where user is BCC'd
 - Excludes emails titled "Real Estate Request"
 
+### meeting-brief
+
+**Schedule:** Weekdays at 7:00 AM Eastern (America/New_York)  
+**Prompt:** `routines/meeting-brief/prompt.md`  
+**Config:** `routines/meeting-brief/schedule.yaml`
+
+Reads today's Google Calendar, identifies external and non-routine meetings, gathers context from Gmail and Slack for each, and sends a single Slack DM digest to Chris before the day starts.
+
+**Qualifying meetings (include if ANY true):**
+- Has at least one non-gopuff.com attendee (external meeting)
+- Is a one-off / non-recurring meeting
+- Is an internal meeting that isn't a routine standup, sync, or 1:1
+
+**Skipped meetings (skip if ALL true):**
+- Recurring event
+- All attendees are @gopuff.com
+- Title contains: standup, stand-up, sync, 1:1, check-in, or weekly
+
+**Required MCP integrations:**
+- Google Calendar (list today's events)
+- Gmail (search recent threads by attendee/topic)
+- Slack (search messages by attendee/topic; send DM)
+
 ## Adding new routines
 
 1. Create a directory under `routines/<routine-name>/`
