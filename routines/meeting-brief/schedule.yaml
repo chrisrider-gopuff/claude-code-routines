@@ -1,12 +1,12 @@
-# Daily Brief — schedule configuration
+# Meeting Brief Digest — schedule configuration
 #
 # Runs every weekday (Mon–Fri) at 8:00 AM Eastern.
 # Eastern Standard Time  = UTC-5  →  13:00 UTC
 # Eastern Daylight Time  = UTC-4  →  12:00 UTC
 # The harness handles DST automatically when timezone is specified.
 
-name: daily-brief
-prompt: routines/daily-brief/prompt.md
+name: meeting-brief
+prompt: routines/meeting-brief/prompt.md
 schedule:
   cron: "0 8 * * 1-5"          # 8:00 AM Eastern, Mon–Fri — harness applies timezone below
   timezone: America/New_York
