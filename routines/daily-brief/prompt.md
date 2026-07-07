@@ -8,7 +8,7 @@ You are executing the Daily Brief routine right now. Complete every step below i
 
 2. **Read yesterday's #morning-briefing thread for status updates.** Search the `#morning-briefing` Slack channel for the most recent message posted before today. Read all thread replies on that message authored by Chris.
 
-   Chris replies using a **numbered list** where each number corresponds to a brief item from that day. Each list item may contain free-text status notes, a resurface/skip signal, and one or more `AT:` lines for Airtable updates. Example reply:
+   Chris replies using a **numbered list** where each number corresponds to a brief item from that day. Each list item may contain free-text status notes, a resurface/skip signal, and one or more `AT:` (or `Note:`) lines for Airtable updates — both prefixes are equivalent triggers. Example reply:
 
    ```
    3. Called Claire, she agreed to $30k. Settled, don't resurface.
@@ -28,12 +28,12 @@ You are executing the Daily Brief routine right now. Complete every step below i
       - Skip/drop signals (e.g., "don't resurface", "resolved", "settled", "skip", "done", "closing", "no action needed") → omit that item from today's brief entirely.
       - No skip signal, or explicit "resurface" / "still pending" → carry the item forward. If there's updated context in the note, incorporate it into today's brief entry.
 
-   c. **`AT:` lines — Airtable updates**: Each `AT:` line triggers one or more field updates on the Legal Tracker record for that item's case. Parse `AT:` content as `Field: Value` pairs, separated by ` / ` if multiple. The case name comes from the brief item — do not require Chris to specify it.
+   c. **`AT:` / `Note:` lines — Airtable updates**: Each `AT:` or `Note:` line triggers one or more field updates on the Legal Tracker record for that item's case. Parse the content after the prefix as `Field: Value` pairs, separated by ` / ` if multiple. The case name comes from the brief item — do not require Chris to specify it.
 
-   **Processing `AT:` lines — Airtable via curl:**
+   **Processing `AT:`/`Note:` lines — Airtable via curl:**
    Follow `.claude/commands/airtable-manager.md`. This routine runs in a remote Linux container — replace all PowerShell calls with Bash `curl`. Read the passphrase from `$AIRTABLE_PASSPHRASE`.
 
-   For each `AT:` line:
+   For each `AT:` or `Note:` line:
    1. Derive the search term from the brief item's case name (apply fuzzy matching: name inversions, partial names).
    2. Call `searchRecords` on the `Matter` field:
       ```bash
@@ -51,7 +51,7 @@ You are executing the Daily Brief routine right now. Complete every step below i
         -d "{\"passphrase\":\"$AIRTABLE_PASSPHRASE\",\"operation\":\"getSchema\",\"baseName\":\"Legal Tracker\"}"
       ```
    5. Call `updateRecord` with the field/value pair(s). Currency fields take plain numbers (not strings); dates use MM/DD/YYYY; never write to the `Status` formula field.
-   6. If `$AIRTABLE_PASSPHRASE` is not set, skip all Airtable updates and list each unprocessed `AT:` line verbatim at the bottom of today's brief.
+   6. If `$AIRTABLE_PASSPHRASE` is not set, skip all Airtable updates and list each unprocessed `AT:`/`Note:` line verbatim at the bottom of today's brief.
 
    **After processing all replies**, append a confirmation block at the bottom of today's brief (omit any subsection that is empty):
 
@@ -60,10 +60,10 @@ You are executing the Daily Brief routine right now. Complete every step below i
    • Miraliev — Total Settlement set to $30,000; Stage set to Settled
 
    ⚠️ Low confidence — review in Airtable and promote if correct:
-   • Item #7 (Barteau) — searched "Barteau" → 2 records matched. AT instruction: Notes: $250k counterdemand received 6/19. Verify which record and apply manually.
+   • Item #7 (Barteau) — searched "Barteau" → 2 records matched. AT/Note instruction: Notes: $250k counterdemand received 6/19. Verify which record and apply manually.
 
    ❌ No Airtable record found:
-   • Item #12 (DCWP) — no match for "DCWP". AT instruction: Stage: Active.
+   • Item #12 (DCWP) — no match for "DCWP". AT/Note instruction: Stage: Active.
    ```
 
    If there are no thread replies, proceed without modification.
@@ -175,6 +175,6 @@ After all items, always append this footer verbatim:
 ---
 _Reply with a numbered list to update tomorrow's brief. Each number = the item above._
 _• Free-text note — carries context forward. Include "skip", "resolved", or "don't resurface" to drop it._
-_• `AT: Field: Value` — writes to Legal Tracker using that item's case name (e.g. `AT: Total Settlement: 45000 / Stage: Settled`). Multiple fields: separate with ` / `. Low-confidence matches will be flagged for manual review._
+_• `AT: Field: Value` or `Note: Field: Value` — writes to Legal Tracker using that item's case name (e.g. `AT: Total Settlement: 45000 / Stage: Settled`). Multiple fields: separate with ` / `. Low-confidence matches will be flagged for manual review._
 _Processed at next morning's run._
 ```
