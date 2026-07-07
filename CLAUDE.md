@@ -10,9 +10,12 @@ This repository contains scheduled Claude Code routines that run automatically.
 **Prompt:** `routines/daily-brief/prompt.md`  
 **Config:** `routines/daily-brief/schedule.yaml`
 
-Sweeps the past 7 days of Gmail and Slack, identifies open follow-up items, and posts to the #morning-briefing Slack channel at 8:00 AM Eastern. The message groups items into Urgent, Active, and Monitoring sections.
+Sweeps the past 7 days of Gmail and Slack, identifies open follow-up items, and posts to the #morning-briefing Slack channel at 8:00 AM Eastern. The message leads with a **Today's Meetings** section, followed by items grouped into Urgent, Active, and Monitoring sections.
 
-**Sources swept:**
+**Today's Meetings:**
+Reads today's Google Calendar and includes a meeting if it's external (non-gopuff.com attendee), one-off/non-recurring, or an internal meeting that isn't a routine standup/sync/1:1. Recurring, all-internal meetings with a title like standup, sync, 1:1, check-in, or weekly are skipped, as are solo blocks with no other attendees. For each qualifying meeting, gathers context from Gmail and Slack (last 30 days, by attendee/topic) and presents it as an unnumbered entry before the numbered case items.
+
+**Sources swept (for the numbered sections):**
 1. Gmail threads where someone is waiting on me or I owe a response
 2. Slack DMs, group DMs, and channel @mentions where a response is pending
 3. Self-authored Gmail notes-to-self (`from:me to:me`, or subjects matching `1:1`, `sync`, `notes`, `weekly`, `debrief`) — action items are extracted individually and only surfaced if not yet completed
@@ -20,6 +23,7 @@ Sweeps the past 7 days of Gmail and Slack, identifies open follow-up items, and 
 Items that appear in multiple sources are consolidated into a single entry with sub-bullets for each distinct next action.
 
 **Required MCP integrations:**
+- Google Calendar (list today's events)
 - Gmail (read threads, search)
 - Slack (search public and private channels, DMs, group DMs; send DMs)
 
@@ -28,29 +32,6 @@ Items that appear in multiple sources are consolidated into a single entry with 
 - Excludes Workers Comp emails where the user is only CC'd with no personal reply
 - Excludes Litigation Hold emails from Michelle Carlson where user is BCC'd
 - Excludes emails titled "Real Estate Request"
-
-### meeting-brief
-
-**Schedule:** Weekdays at 8:00 AM Eastern (America/New_York)  
-**Prompt:** `routines/meeting-brief/prompt.md`  
-**Config:** `routines/meeting-brief/schedule.yaml`
-
-Reads today's Google Calendar, identifies external and non-routine meetings, gathers context from Gmail and Slack for each, and sends a single Slack DM digest to Chris before the day starts.
-
-**Qualifying meetings (include if ANY true):**
-- Has at least one non-gopuff.com attendee (external meeting)
-- Is a one-off / non-recurring meeting
-- Is an internal meeting that isn't a routine standup, sync, or 1:1
-
-**Skipped meetings (skip if ALL true):**
-- Recurring event
-- All attendees are @gopuff.com
-- Title contains: standup, stand-up, sync, 1:1, check-in, or weekly
-
-**Required MCP integrations:**
-- Google Calendar (list today's events)
-- Gmail (search recent threads by attendee/topic)
-- Slack (search messages by attendee/topic; send DM)
 
 ## Adding new routines
 

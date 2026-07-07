@@ -68,13 +68,41 @@ You are executing the Daily Brief routine right now. Complete every step below i
 
    If there are no thread replies, proceed without modification.
 
-3. Sweep the last 7 days of **Gmail** and **Slack** using the source instructions below.
+3. Build the **Today's Meetings** section — read today's calendar, filter to qualifying meetings, and gather context for each (see "Today's Meetings" section below).
 
-4. Apply all filtering rules to eliminate noise.
+4. Sweep the last 7 days of **Gmail** and **Slack** using the source instructions below.
 
-5. Consolidate items: when the same underlying matter appears in multiple sources (e.g., a Slack DM and a Gmail thread, or a Slack DM and a self-authored note), merge them into a single entry with sub-bullets for each distinct next action.
+5. Apply all filtering rules to eliminate noise.
 
-6. Send a message to the **#morning-briefing** Slack channel with the formatted output (see Format section below).
+6. Consolidate items: when the same underlying matter appears in multiple sources (e.g., a Slack DM and a Gmail thread, or a Slack DM and a self-authored note), merge them into a single entry with sub-bullets for each distinct next action.
+
+7. Send a message to the **#morning-briefing** Slack channel with the formatted output (see Format section below), leading with **Today's Meetings** followed by the numbered Urgent/Active/Monitoring sections.
+
+---
+
+## Today's Meetings
+
+Read today's calendar (Google Calendar tool) and get the full attendee list, title, time, and any existing description for each event.
+
+**Include a meeting if it meets ANY of these criteria:**
+- Has at least one attendee with a non-gopuff.com email domain (external meeting)
+- Is a one-off / non-recurring meeting, regardless of attendee domain
+- Is an internal meeting that isn't a routine standup, sync, or recurring 1:1
+
+**Skip a meeting if ALL of these are true:**
+- It is a recurring event
+- All attendees have @gopuff.com emails
+- The title contains words like: standup, stand-up, stand up, sync, 1:1, check-in, or weekly
+
+A solo block with no other attendees is not a meeting — skip it regardless of the criteria above.
+
+**For each qualifying meeting**, gather context in parallel:
+- **Gmail:** Search recent threads (last 30 days) involving the meeting attendees' email addresses or the meeting subject/title. Look for prior correspondence, open action items, attachments, anything that establishes background.
+- **Slack:** Search recent messages (last 30 days) mentioning the attendees' names, the meeting topic, or any company/project names visible in the invite. Use both public and private search if available.
+
+Pull the 3–5 most relevant results from each source, and note the direct link (URL or permalink) to each source used. If a source search returns nothing useful, note "No recent context found" rather than fabricating context. Do not include confidential document content verbatim — summarize and link.
+
+If no meetings qualify, omit the Today's Meetings section entirely from today's message.
 
 ---
 
@@ -138,6 +166,15 @@ After collecting all Gmail and Slack items:
 ## Format for the Slack message
 
 ```
+Today's Meetings
+
+**[Meeting Title] — [Time]**
+Attendees: [names + companies for external; first names for internal]
+Context: 5–10 lines covering — what this meeting is likely about, any open items or recent history, anything Chris should know walking in.
+Sources: [linked list — each source as a clickable Slack permalink or Gmail thread link, labeled descriptively, e.g. "Email: Re: Settlement Agreement (Jun 28)" or "Slack: #legal thread on driver arbitration (Jun 27)"]
+
+[repeat for each qualifying meeting, in chronological order by start time; omit this whole section if none qualify]
+
 🔴 Urgent/Time-Sensitive
 
 1. **[Bold Title]** — [1–2 sentence summary with relevant people and specific next action]
@@ -159,7 +196,7 @@ After collecting all Gmail and Slack items:
 [repeat, continuing the number sequence from where 🟡 left off]
 ```
 
-Numbers run sequentially across all three sections — do not restart at 1 for each category.
+Meeting entries in **Today's Meetings** are unnumbered — they aren't case items and aren't tracked via thread replies. Numbers run sequentially across the 🔴/🟡/📌 sections only — do not restart at 1 for each category.
 
 Each item must include:
 - The person(s) involved
