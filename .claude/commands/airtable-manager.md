@@ -17,8 +17,11 @@ Claude calls a Google Apps Script web app via Desktop Commander + PowerShell. Th
 
 **Apps Script URL:**
 ```
-https://script.google.com/macros/s/AKfycbyw9DuipVzhlUecfmW66mBBuTgie9ne0GFHlhfy9fwrQDiYPKnSripltBAkW_zHy2T06g/exec
+https://script.google.com/macros/s/AKfycbydSpheVX7t1RAs5TXlDk6Fl8yeqa_GVfYJLwCdssQKmKtVpk1XSXG_esgTVbsRoTAz-Q/exec
 ```
+(Updated 2026-07-10 — the previous deployment URL started 404ing. If this one ever
+stops working, redeploy the Apps Script as a web app and update this URL, rather than
+guessing at another one.)
 
 ## Passphrase
 
@@ -43,8 +46,16 @@ $passphrase = (Get-Content "G:\My Drive\Automation\Phrase.txt" -Raw).Trim()
 $body = @"
 {"passphrase":"$passphrase","operation":"searchRecords","baseName":"Legal Tracker","field":"Matter","value":"Smith, John"}
 "@
-Invoke-RestMethod -Uri "https://script.google.com/macros/s/AKfycbyw9DuipVzhlUecfmW66mBBuTgie9ne0GFHlhfy9fwrQDiYPKnSripltBAkW_zHy2T06g/exec" -Method POST -ContentType "application/json" -Body $body
+Invoke-RestMethod -Uri "https://script.google.com/macros/s/AKfycbydSpheVX7t1RAs5TXlDk6Fl8yeqa_GVfYJLwCdssQKmKtVpk1XSXG_esgTVbsRoTAz-Q/exec" -Method POST -ContentType "application/json" -Body $body
 ```
+
+On Linux containers (no PowerShell), read the passphrase from `$AIRTABLE_PASSPHRASE` and
+use `curl -sS -L` instead (the `-L` is required — the Apps Script `/exec` endpoint always
+302-redirects to `script.googleusercontent.com` to serve the response; don't add `-X POST`
+explicitly when following the redirect, since that forces POST onto the redirected GET
+request and the echo endpoint replies 405). If the passphrase in `$AIRTABLE_PASSPHRASE`
+gets `{"error":"Unauthorized"}`, it may have been rotated/extended — check with Chris for
+the current value rather than guessing.
 
 ## Supported operations
 
@@ -55,6 +66,11 @@ All payloads require `passphrase`, `operation`, and `baseName`. `tableName` is o
 
 ### Search by field value
 `{"passphrase":"...","operation":"searchRecords","baseName":"Legal Tracker","field":"Matter","value":"Smith, John"}`
+
+Note: `searchRecords` appears to require an exact (or near-exact) match on this deployment —
+searching a bare surname like `"Fundingsland"` against a `Matter` value of `"Fundingsland, Jonathan"`
+returned zero records. For substring/fuzzy lookups, use `listRecords` with a `FIND()` filter formula
+instead: `{"operation":"listRecords","baseName":"Legal Tracker","filterFormula":"FIND('Fundingsland',{Matter})"}`.
 
 ### Get a record by ID
 `{"passphrase":"...","operation":"getRecord","baseName":"Legal Tracker","recordId":"recXXXXXXXXXXXXXX"}`
@@ -106,5 +122,10 @@ Before any `createRecord` or `updateRecord`, call `getSchema` to retrieve curren
 - Primary field is **`Matter`** (not "Name")
 - `Status` is a formula — do not include in writes
 - Currency fields take plain numbers, not strings
-- Dates use MM/DD/YYYY
+- Dates: pass ISO `YYYY-MM-DD` (confirmed working; existing records store dates this way)
 - Field names are case-sensitive
+- There is no literal **`Notes`** field on `Cases`. For narrative updates ("Notes: ...", "AT: Notes: ...")
+  do NOT overwrite `Synopsis` or `Next Action` — that destroys existing case background. Instead,
+  `createRecord` a new row in the **`Case Activity`** table with `Case: [recordId]`, `Entry: <the note
+  text>`, `Entry Type: "Claude"`, `Activity Date: <today, YYYY-MM-DD>`. This is additive and matches
+  the schema's built-in `Entry Type` option for exactly this use case.
