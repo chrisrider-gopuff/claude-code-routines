@@ -8,14 +8,17 @@ You are executing the Daily Brief routine right now. Complete every step below i
 
 2. **Read yesterday's #morning-briefing thread for status updates.** Search the `#morning-briefing` Slack channel for the most recent message posted before today. Read all thread replies on that message authored by Chris.
 
-   Chris replies using a **numbered list** where each number corresponds to a brief item from that day. Each list item may contain free-text status notes, a resurface/skip signal, and one or more `AT:` (or `Note:`) lines for Airtable updates — both prefixes are equivalent triggers. Example reply:
+   Chris replies using a **numbered list** where each number corresponds to a brief item from that day. Each list item may contain free-text status notes, a resurface/skip signal, and one or more ALL-CAPS keyword lines for Airtable updates. Example reply:
 
    ```
    3. Called Claire, she agreed to $30k. Settled, don't resurface.
-      AT: Total Settlement: 30000 / Stage: Settled
+      NOTE: Settled at $30k, signed 7/10
+
+   6. Exposure updated per new medical records; pushing for early mediation.
+      EXPOSURE: 150000 / LIT STRATEGY: Push for early mediation given exposure increase
 
    7. Still need to decide on counterdemand direction. Resurface.
-      AT: Notes: $250k counterdemand received 6/19, direction still needed
+      NOTE: $250k counterdemand received 6/19, direction still needed
 
    15. No action needed, skip.
    ```
@@ -28,42 +31,46 @@ You are executing the Daily Brief routine right now. Complete every step below i
       - Skip/drop signals (e.g., "don't resurface", "resolved", "settled", "skip", "done", "closing", "no action needed") → omit that item from today's brief entirely.
       - No skip signal, or explicit "resurface" / "still pending" → carry the item forward. If there's updated context in the note, incorporate it into today's brief entry.
 
-   c. **`AT:` / `Note:` lines — Airtable updates**: Each `AT:` or `Note:` line triggers one or more field updates on the Legal Tracker record for that item's case. Parse the content after the prefix as `Field: Value` pairs, separated by ` / ` if multiple. The case name comes from the brief item — do not require Chris to specify it.
+   c. **ALL-CAPS keyword lines — Airtable updates**: Any line under a numbered item that starts with a word or short phrase in ALL CAPS followed by a colon triggers an Airtable update for that item's case. Multiple keywords in one item are separated by ` / `. The case name comes from the brief item — do not require Chris to specify it.
+      - `NOTE:` or `NOTES:` is special-cased: it does **not** overwrite a field. It logs a new dated entry to the Legal Tracker's **Case Activity** table for that case.
+      - Any other ALL-CAPS word/phrase is fuzzy-matched (case- and spacing-insensitive) to the closest **Cases** field name — e.g. `EXPOSURE` → `Exposure`, `LIT STRATEGY` → `Litigation Strategy`, `DEMAND` → `Demand`, `TOTAL SETTLEMENT` → `Total Settlement` — and that field is overwritten with the given value.
 
-   **Processing `AT:`/`Note:` lines — Airtable via curl:**
-   Follow `.claude/commands/airtable-manager.md`. This routine runs in a remote Linux container — replace all PowerShell calls with Bash `curl`. Read the passphrase from `$AIRTABLE_PASSPHRASE`.
+   **Processing ALL-CAPS keyword lines — Airtable via curl:**
+   Follow `.claude/commands/airtable-manager.md` for the current Apps Script URL, passphrase source, and curl gotchas (needs `-L` to follow the redirect; don't force `-X POST` through it or the echo endpoint 405s). This routine runs in a remote Linux container — use Bash `curl`, reading the passphrase from `$AIRTABLE_PASSPHRASE`.
 
-   For each `AT:` or `Note:` line:
+   For each numbered item with one or more ALL-CAPS keyword lines:
    1. Derive the search term from the brief item's case name (apply fuzzy matching: name inversions, partial names).
-   2. Call `searchRecords` on the `Matter` field:
+   2. Call `listRecords` with a `FIND()` filter formula on `Matter` (using the Apps Script URL from `.claude/commands/airtable-manager.md`) — plain `searchRecords` requires an exact match and will miss most real case names (e.g. searching "Fundingsland" won't match "Fundingsland, Jonathan"):
       ```bash
-      curl -s -X POST "https://script.google.com/macros/s/AKfycbyw9DuipVzhlUecfmW66mBBuTgie9ne0GFHlhfy9fwrQDiYPKnSripltBAkW_zHy2T06g/exec" \
+      curl -sS -L "<Apps Script URL from airtable-manager.md>" \
         -H "Content-Type: application/json" \
-        -d "{\"passphrase\":\"$AIRTABLE_PASSPHRASE\",\"operation\":\"searchRecords\",\"baseName\":\"Legal Tracker\",\"field\":\"Matter\",\"value\":\"[derived name]\"}"
+        -d "{\"passphrase\":\"$AIRTABLE_PASSPHRASE\",\"operation\":\"listRecords\",\"baseName\":\"Legal Tracker\",\"filterFormula\":\"FIND('[derived name]',{Matter})\"}"
       ```
-   3. **Confidence assessment — apply before writing:**
+   3. **Record-match confidence — apply before writing:**
       - **High confidence**: exactly one record returned and its name closely matches the brief item → proceed to step 4.
       - **Low confidence** (do NOT write): zero records found, two or more records returned, or the name match is weak (partial, ambiguous, or the brief item is a topic rather than a named party). Log it in the confirmation block for Chris to review and apply manually in Airtable.
-   4. Before writing, call `getSchema` to confirm valid field names and select option values:
-      ```bash
-      curl -s -X POST "https://script.google.com/macros/s/AKfycbyw9DuipVzhlUecfmW66mBBuTgie9ne0GFHlhfy9fwrQDiYPKnSripltBAkW_zHy2T06g/exec" \
-        -H "Content-Type: application/json" \
-        -d "{\"passphrase\":\"$AIRTABLE_PASSPHRASE\",\"operation\":\"getSchema\",\"baseName\":\"Legal Tracker\"}"
-      ```
-   5. Call `updateRecord` with the field/value pair(s). Currency fields take plain numbers (not strings); dates use MM/DD/YYYY; never write to the `Status` formula field.
-   6. If `$AIRTABLE_PASSPHRASE` is not set, skip all Airtable updates and list each unprocessed `AT:`/`Note:` line verbatim at the bottom of today's brief.
+   4. Call `getSchema` once per run to confirm current field names and select option values — do not guess field names.
+   5. For each ALL-CAPS keyword in the item:
+      - `NOTE:` / `NOTES:` → `createRecord` in the **`Case Activity`** table: `Case: [recordId]`, `Entry: <value>`, `Entry Type: "Claude"`, `Activity Date: <today, ISO YYYY-MM-DD>`.
+      - Any other keyword → fuzzy-match it against the `Cases` field list from `getSchema`.
+        - Clear single match → `updateRecord` with that field. Currency fields take plain numbers (not strings); dates use ISO `YYYY-MM-DD`; never write to `Status` (it's a formula field).
+        - No clear field match → treat as low confidence. Log the raw keyword and value in the confirmation block rather than guessing at a field.
+   6. If `$AIRTABLE_PASSPHRASE` is not set, skip all Airtable updates and list each unprocessed ALL-CAPS line verbatim at the bottom of today's brief.
 
    **After processing all replies**, append a confirmation block at the bottom of today's brief (omit any subsection that is empty):
 
    ```
    ✅ Airtable updated:
-   • Miraliev — Total Settlement set to $30,000; Stage set to Settled
+   • Miraliev — Total Settlement set to $30,000; Case Activity note logged
 
-   ⚠️ Low confidence — review in Airtable and promote if correct:
-   • Item #7 (Barteau) — searched "Barteau" → 2 records matched. AT/Note instruction: Notes: $250k counterdemand received 6/19. Verify which record and apply manually.
+   ⚠️ Low confidence (case match) — review in Airtable and promote if correct:
+   • Item #7 (Barteau) — searched "Barteau" → 2 records matched. Instruction: NOTE: $250k counterdemand received 6/19. Verify which record and apply manually.
+
+   ⚠️ Low confidence (no matching field) — review and apply manually:
+   • Item #9 (GoTV) — "STAGE" doesn't match any Cases field. Instruction: STAGE: Active.
 
    ❌ No Airtable record found:
-   • Item #12 (DCWP) — no match for "DCWP". AT/Note instruction: Stage: Active.
+   • Item #12 (DCWP) — no match for "DCWP". Instruction: EXPOSURE: 50000.
    ```
 
    If there are no thread replies, proceed without modification.
@@ -212,6 +219,6 @@ After all items, always append this footer verbatim:
 ---
 _Reply with a numbered list to update tomorrow's brief. Each number = the item above._
 _• Free-text note — carries context forward. Include "skip", "resolved", or "don't resurface" to drop it._
-_• `AT: Field: Value` or `Note: Field: Value` — writes to Legal Tracker using that item's case name (e.g. `AT: Total Settlement: 45000 / Stage: Settled`). Multiple fields: separate with ` / `. Low-confidence matches will be flagged for manual review._
+_• `NOTE:` or `NOTES:` — logs a dated entry to the Legal Tracker's Case Activity for that item's case. Any other ALL-CAPS word — writes to the closest-matching Legal Tracker field (e.g. `EXPOSURE: 90000-360000`, `LIT STRATEGY: Hold pending mediation`). Multiple fields: separate with ` / `. Low-confidence matches will be flagged for manual review._
 _Processed at next morning's run._
 ```
