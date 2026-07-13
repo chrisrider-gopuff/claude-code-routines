@@ -1,0 +1,66 @@
+{
+  "matter_bill": "Tennessee HB-1414",
+  "description": "Verify driver authentication credentials before first delivery",
+  "jurisdiction": "Tennessee",
+  "effective_date": "2025-07-01",
+  "legal_owner": "Chris Rider",
+  "product_owner": "Sarah Chen",
+  "statutory_trigger": "Tennessee HB-1414 § 67-4-2108",
+  "statutory_effective": "2025-07-01",
+  "summary": "Tennessee HB-1414 requires gig delivery platforms to verify driver eligibility through three forms of clearance before allowing first delivery. This includes government-issued ID verification, background check, and vehicle registration confirmation. The current grace period for new Driver Partners must be eliminated.",
+  "in_scope": [
+    "All new Driver Partners in Tennessee",
+    "Gopuff app and website onboarding flows",
+    "Driver Ops team implementation",
+    "First delivery gate mechanism"
+  ],
+  "out_of_scope": [
+    "Existing Driver Partners (already accepted before 2025-07-01)",
+    "UK/EU driver operations",
+    "Third-party delivery networks"
+  ],
+  "requirements": [
+    {
+      "citation": "HB-1414 § 67-4-2108(a) — Government-issued ID verification",
+      "current_state": "Gopuff collects driver name and email during onboarding. No government ID is verified.",
+      "gap_risk": "Non-compliant — missing government ID verification entirely",
+      "future_state": "Driver Ops: Collect government-issued ID (driver license or passport) and verify against issuing authority before account activation"
+    },
+    {
+      "citation": "HB-1414 § 67-4-2108(b) — Background check clearance",
+      "current_state": "Background checks run asynchronously after Driver Partner acceptance; clearance does not block first delivery.",
+      "gap_risk": "Non-compliant — timing and enforcement do not align with statute requirement",
+      "future_state": "Engineering: Gate first delivery on successful background check completion. Block delivery if background check fails or pending."
+    },
+    {
+      "citation": "HB-1414 § 67-4-2108(c) — Vehicle registration verification",
+      "current_state": "We collect vehicle description (year, make, model) but do not verify registration status with DMV.",
+      "gap_risk": "Partial — we have vehicle data but no registration verification",
+      "future_state": "Engineering: Integrate with Tennessee DMV API to verify vehicle registration at onboarding. Reject unregistered vehicles."
+    },
+    {
+      "citation": "HB-1414 § 67-4-2108(d) — Eliminate grace period",
+      "current_state": "New Driver Partners can make 5 deliveries before background check clears (grace period).",
+      "gap_risk": "Non-compliant — statute prohibits any deliveries before all three clearances complete",
+      "future_state": "Driver Ops: Remove existing 5-delivery grace period. Gate first TN delivery on all three clearances completing."
+    }
+  ],
+  "assumptions": [
+    "Background check turnaround time is <2 hours for 95% of applications",
+    "Tennessee DMV API is available and responsive",
+    "Driver Partners can resubmit failed background checks",
+    "Vehicle registration verification covers all Tennessee-registered vehicles"
+  ],
+  "open_questions": [
+    "If Driver Partner's background check fails, can they reapply immediately or after a waiting period?",
+    "What happens to in-flight deliveries if a Driver Partner's registration is revoked mid-shift?",
+    "Are we liable if DMV API returns incorrect verification results?",
+    "Should we grandfather existing Driver Partners or apply rule retroactively?"
+  ],
+  "references": [
+    "https://capitol.tn.gov/Bills/112/Bill/HB1414.pdf",
+    "https://sos.tn.gov/products-services/driversmv-records",
+    "https://jira.gopuff.com/browse/LEGAL-5432"
+  ],
+  "date_drafted": "2025-06-04"
+}

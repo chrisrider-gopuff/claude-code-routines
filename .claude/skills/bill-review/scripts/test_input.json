@@ -1,0 +1,51 @@
+{
+  "title": "Tennessee HB 2175 — Compliance Snapshot",
+  "subtitle": "Effective July 1, 2026 | New Part 4 to T.C.A. Title 65, Chapter 15",
+  "rows": [
+    {
+      "newRequirement": "Criminal background check, sex-offender search, and MVR on every potential driver before first delivery (§ 404(7)–(9)); § 408 prohibits permitting any individual to act as a driver with disqualifying records.",
+      "currentStatus": "We complete background checks AFTER first delivery; deliveries can continue for seven days without deactivation while BGC is pending.",
+      "complianceGap": "Allowing deliveries before clearance is facially inconsistent with §§ 404(7)–(9) and 408 and creates liability risk. Bill is silent on penalties; background statutes do not provide enforcement guidance.",
+      "risk": "HIGH",
+      "proposedClosure": "**No risk:** gate first delivery on completion of all three checks (criminal, sex-offender, MVR). Eliminate the 7-day pending window in TN. Implement as a TN carve-out from the national process.\n**Some risk:** continue current policy.",
+      "implementationCost": "$$",
+      "implementationDifficulty": "Medium"
+    },
+    {
+      "newRequirement": "DNC must maintain a backstop policy for available-period coverage at TN financial-responsibility minimums (currently 25/50/25), and service-period coverage with at least $100k for death/BI/PD (§ 405(b)).",
+      "currentStatus": "We do not maintain auto liability insurance for TN drivers during available or service period.",
+      "complianceGap": "Facial non-compliance with § 405(b). Tort exposure under negligent-entrustment via statute-as-standard-of-care.",
+      "risk": "HIGH",
+      "proposedClosure": "Add TN to current NCOIL policies — current limits should be sufficient. Confirm structure with broker.",
+      "implementationCost": "$$$",
+      "implementationDifficulty": "High"
+    },
+    {
+      "newRequirement": "Driving history is a required application element to be submitted before becoming a driver (§ 404(5)).",
+      "currentStatus": "Our driver application does not capture 'driving history'.",
+      "complianceGap": "Application content gap; § 404(5) requires the field before onboarding.",
+      "risk": "MEDIUM",
+      "proposedClosure": "Add a self-reported driving-history field to the TN application (e.g., moving violations and at-fault accidents over the past three years).",
+      "implementationCost": "$",
+      "implementationDifficulty": "Low"
+    },
+    {
+      "newRequirement": "Written disclosure to each driver before they accept their first delivery — both the DNC's coverage limits and the warning that the driver's personal policy may exclude DNC use (§ 406(a)).",
+      "currentStatus": "We do not currently include this written disclosure in the TN onboarding flow.",
+      "complianceGap": "Disclosure gap; § 406(a) requires the language at first-delivery acceptance.",
+      "risk": "LOW",
+      "proposedClosure": "Incorporate disclosure into onboarding process.",
+      "implementationCost": "$",
+      "implementationDifficulty": "Low"
+    },
+    {
+      "newRequirement": "Specific TN operational obligations: in-app driver photo and license plate, electronic receipts, zero-tolerance drug/alcohol policy with website notice, complaint intake and immediate suspension during investigation, trip records ≥ 1 year, driver records ≥ 1 year post-deactivation, complaint records ≥ 2 years, nondiscrimination, no PII disclosure (§§ 403, 404(2)–(6), 406(e), 407, 409–412).",
+      "currentStatus": "These obligations are handled via existing nationwide policies and platform features.",
+      "complianceGap": "Coverage likely already exists; need to confirm against TN-specific text.",
+      "risk": "LOW",
+      "proposedClosure": "Audit requirements against existing nationwide policies and platform features to confirm TN coverage; remediate any gaps.",
+      "implementationCost": "$",
+      "implementationDifficulty": "Low"
+    }
+  ]
+}

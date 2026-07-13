@@ -33,9 +33,16 @@ $passphrase = (Get-Content "G:\My Drive\Automation\Phrase.txt" -Raw).Trim()
 
 ## Known Bases
 
-| Display Name   | Base ID              | Default Table | Table ID             |
-|----------------|----------------------|---------------|----------------------|
-| Legal Tracker  | appFIB9fJCzTeFDcG    | Cases         | tblmPLdw7pLLnAyFs    |
+| Display Name       | Base ID           | Default Table | Table ID          |
+|---------------------|-------------------|---------------|-------------------|
+| Legal Tracker       | appFIB9fJCzTeFDcG | Cases         | tblmPLdw7pLLnAyFs |
+| D Ops Request Form  | appt2FqM1fSXbhcHn | Requests      | tblgCUTmuTCXU5GQQ |
+
+Additional tables in Legal Tracker:
+
+| Table Name      | Table ID          |
+|------------------|-------------------|
+| Outside Counsel  | tblZYMpOfoSp1tGFd |
 
 To add a new base: update the `BASES` object in AirtableAPI.gs and add a row to this table.
 
@@ -115,6 +122,19 @@ Apply fuzzy matching:
 
 - `{"error": "Unauthorized"}` — passphrase file missing or wrong
 - Other errors: report clearly and suggest the fix
+
+## D Ops Request Form — field reference
+
+| Field                      | Type              | Notes                                                                                       |
+|----------------------------|-------------------|---------------------------------------------------------------------------------------------|
+| `Name`                     | text              | Request title — use claimant name (e.g., "Bell, Shannon L.")                               |
+| `Who is this request for?` | text              | Always `"Legal"`                                                                            |
+| `How can we help?`         | text              | Request description                                                                         |
+| `Type of Request`          | array             | `["Data Pull"]` if description contains "data pull" (case-insensitive); else `["Document Pull"]` |
+| `Due Date`                 | date (YYYY-MM-DD) | Optional                                                                                    |
+| `Priority`                 | text              | Optional                                                                                    |
+| `Task Status`              | text              | Do not set on create                                                                        |
+| `Assigned To`              | user array        | Do not set on create                                                                        |
 
 ## Field reference
 
