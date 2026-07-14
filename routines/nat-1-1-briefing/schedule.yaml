@@ -1,0 +1,17 @@
+# Nat 1:1 Briefing — schedule configuration
+#
+# Phase 1 (build + post draft) runs every weekday (Mon–Fri) at 3:00 AM Eastern.
+# Phases 2 and 3 are NOT time-triggered — they fire externally via the
+# routine's API endpoint (Slack emoji reaction -> Workflow Builder ->
+# Google Sheet -> Apps Script -> API), per the Entry point section in
+# prompt.md. This schedule only covers the Phase 1 trigger.
+#
+# Eastern Standard Time  = UTC-5  ->  08:00 UTC
+# Eastern Daylight Time  = UTC-4  ->  07:00 UTC
+# The harness handles DST automatically when timezone is specified.
+
+name: nat-1-1-briefing
+prompt: routines/nat-1-1-briefing/prompt.md
+schedule:
+  cron: "0 3 * * 1-5"          # 3:00 AM Eastern, Mon–Fri — harness applies timezone below
+  timezone: America/New_York
