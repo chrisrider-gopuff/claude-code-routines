@@ -1,0 +1,16 @@
+# Legal Tracker Triage — schedule configuration
+#
+# Runs every weekday (Mon–Fri) at 6:00 AM Eastern, ahead of daily-brief at 8:00 AM.
+# Eastern Standard Time  = UTC-5  →  11:00 UTC
+# Eastern Daylight Time  = UTC-4  →  10:00 UTC
+# The harness handles DST automatically when timezone is specified.
+#
+# NOTE: placeholder timing — adjust to preference. The Monday review-window
+# fallback in prompt.md (go back to the preceding Friday) assumes this only
+# runs on weekdays; change both together if that changes.
+
+name: legal-tracker-triage
+prompt: routines/legal-tracker-triage/prompt.md
+schedule:
+  cron: "0 6 * * 1-5"          # 6:00 AM Eastern, Mon–Fri — harness applies timezone below
+  timezone: America/New_York
