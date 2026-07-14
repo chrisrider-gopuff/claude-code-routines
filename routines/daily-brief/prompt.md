@@ -29,12 +29,18 @@ Never run both phases in the same invocation.
 
 **How the API trigger fires (context only — this happens outside Claude):** Chris
 reacts to today's posted brief message in #morning-briefing with
-:white_check_mark:. A Slack Workflow Builder workflow appends a row to
+:white_check_mark:. A Slack Workflow Builder workflow writes to
 [the phase trigger sheet](https://docs.google.com/spreadsheets/d/1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ/edit)
-— columns `Channel`, `Timestamp`, `Emoji`, `Routine`. This sheet is shared with the
-nat-1-1-briefing routine; the `Routine` column (value `daily-brief` for this
-routine's rows) tells the Apps Script poller which routine's `/fire` endpoint to
-call. A time-driven Apps Script trigger reads new rows and POSTs
+— one fixed row per channel, whose `Timestamp` cell gets overwritten with the
+reacted-to message's ts each time (not appended). The sheet also has a `Routine`
+column, set manually by Chris purely for his own reference (to keep track of
+which routine owns which channel) — it isn't read by either poller. This sheet
+is shared with the nat-1-1-briefing routine, but each routine has its own
+dedicated Apps Script poller reading the same sheet: daily-brief's is
+`dailybrief.gs` (`checkForNewDailyBriefTriggers`), hardcoded to the
+#morning-briefing channel ID and this routine's own `/fire` endpoint/token — it
+does no cross-routine dispatch. On each poll, if that channel's `Timestamp` cell
+differs from the last-seen value, it POSTs
 `text: "PHASE2 channel_id=<Channel> ts=<Timestamp>"` to this routine's `/fire`
 endpoint.
 
@@ -198,9 +204,10 @@ read everything needed from the fired message and Slack directly.
   `https://script.google.com/macros/s/AKfycbyFw0Upbi-AMe_t8inVpqyvJ6mFz2u7ymBGFeS_C58DKLG1Op6wXO2PaGba6X_NiNsjqA/exec`,
   shared secret in the Keys sheet under label `SHARED_SECRET`.
 - Daily Tasks tasklist ID: `ZUFkMExMTVBLbWFMYTRKTA`.
-- Phase trigger sheet (shared with nat-1-1-briefing):
-  `1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ`, `Routine` column value for this
-  routine: `daily-brief`.
+- Phase trigger sheet (shared with nat-1-1-briefing, each routine has its own
+  poller script — see Entry point): `1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ`.
+  This routine's poller is `dailybrief.gs` (`checkForNewDailyBriefTriggers`),
+  watching the #morning-briefing row.
 
 ---
 
