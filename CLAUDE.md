@@ -55,6 +55,27 @@ A Thread Matches table caches thread→case matches so repeat runs skip re-match
 
 **Required environment:** `AIRTABLE_API_KEY` set on the environment this routine runs from.
 
+### nat-1-1-briefing
+
+**Schedule:** Phase 1 runs weekdays at 3:00 AM Eastern (America/New_York); Phases 2–3 fire externally (not on a schedule)  
+**Prompt:** `routines/nat-1-1-briefing/prompt.md`  
+**Config:** `routines/nat-1-1-briefing/schedule.yaml`
+
+Prepares Chris Rider's briefing ahead of his recurring 1:1 with Nat Flandreau, in three phases:
+1. **Draft** (schedule-triggered) — if today's calendar has the Chris/Nat 1:1, sweeps the Legal Tracker Airtable base plus #morning-briefing and #weekly-briefing Slack channels for new/changed matters, dedupes by fact pattern (not name/keyword), classifies each item as New/Old business and New case/Update/Discussion, and posts a numbered draft to a review channel.
+2. **Finalize** (fired externally via a :100: Slack reaction → Workflow Builder → Google Sheet → Apps Script → API call) — applies Chris's thread-reply edits (drop/revise/`NS:` note) and posts a final version for approval.
+3. **Publish** (fired externally via a :white_check_mark: reaction, same trigger chain) — posts the approved final version into #chris-nat-1to1 as the permanent record, which also serves as the Old Business source for future runs.
+
+State between phases is tracked in `routines/nat-1-1-briefing/state.json`, since each phase may run in a fresh session.
+
+**Required MCP integrations:**
+- Google Calendar (check for today's Chris/Nat 1:1)
+- Slack (read/search channels, send messages)
+- Airtable Legal Tracker (`appFIB9fJCzTeFDcG`) — read-only for this routine
+- Google Drive (one-time seed doc read on first-ever run)
+
+**Note:** Several setup items are still open before this runs in production — see "Open items to resolve before going live" in `prompt.md` (review channel is currently a test channel, the API trigger/bearer token and the Slack Workflow Builder → Sheet → Apps Script chain need to be confirmed as live).
+
 ## Adding new routines
 
 1. Create a directory under `routines/<routine-name>/`
