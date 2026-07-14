@@ -344,5 +344,6 @@ After all items, always append this footer verbatim:
 _Reply with a numbered list to update tomorrow's brief. Each number = the item above._
 _• Free-text note — carries context forward. Include "skip", "resolved", or "don't resurface" to drop it._
 _• `NOTE:` or `NOTES:` — logs a dated entry to the Legal Tracker's Case Activity for that item's case. Any other ALL-CAPS word — writes to the closest-matching Legal Tracker field (e.g. `EXPOSURE: 90000-360000`, `LIT STRATEGY: Hold pending mediation`). Multiple fields: separate with ` / `. Low-confidence matches will be flagged for manual review._
+_• `TASK: <description> (due <date>)` or `TIME: <description> at <datetime>` — react to this message with ✅ to create a Google Task and/or Calendar event from these lines. Fires immediately on your reaction, separately from tomorrow's Airtable pass._
 _Processed at next morning's run._
 ```
