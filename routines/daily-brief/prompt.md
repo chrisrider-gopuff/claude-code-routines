@@ -72,26 +72,49 @@ endpoint.
       - Any other ALL-CAPS word/phrase is fuzzy-matched (case- and spacing-insensitive) to the closest **Cases** field name — e.g. `EXPOSURE` → `Exposure`, `LIT STRATEGY` → `Litigation Strategy`, `DEMAND` → `Demand`, `TOTAL SETTLEMENT` → `Total Settlement` — and that field is overwritten with the given value. **Exception:** `TASK:` and `TIME:` are never Airtable fields — they're handled by Phase 2 (see Entry point) when Chris reacts with :white_check_mark:, not by this next-morning Airtable pass. Skip them here entirely, whether or not Phase 2 has already run for them.
 
    **Processing ALL-CAPS keyword lines — Airtable via curl:**
-   Follow `.claude/commands/airtable-manager.md` for the current Apps Script URL, passphrase source, and curl gotchas (needs `-L` to follow the redirect; don't force `-X POST` through it or the echo endpoint 405s). This routine runs in a remote Linux container — use Bash `curl`, reading the passphrase from `$AIRTABLE_PASSPHRASE`.
+   Call the Airtable REST API directly — no proxy, no skill. Read the key from
+   `$AIRTABLE_API_KEY` and send it as a Bearer token on every request:
+   `-H "Authorization: Bearer $AIRTABLE_API_KEY"`.
+
+   Legal Tracker base ID: `appFIB9fJCzTeFDcG`. Tables used here: `Cases` (default/primary
+   table) and `Case Activity`. Table names containing spaces must be URL-encoded in the
+   path (`Case Activity` → `Case%20Activity`).
 
    For each numbered item with one or more ALL-CAPS keyword lines:
    1. Derive the search term from the brief item's case name (apply fuzzy matching: name inversions, partial names).
-   2. Call `listRecords` with a `FIND()` filter formula on `Matter` (using the Apps Script URL from `.claude/commands/airtable-manager.md`) — plain `searchRecords` requires an exact match and will miss most real case names (e.g. searching "Fundingsland" won't match "Fundingsland, Jonathan"):
+   2. List/filter records with a `FIND()` filter formula on `Matter` — an exact-value lookup will miss most real case names (e.g. searching "Fundingsland" won't match "Fundingsland, Jonathan"), so always filter rather than look up by exact value:
       ```bash
-      curl -sS -L "<Apps Script URL from airtable-manager.md>" \
-        -H "Content-Type: application/json" \
-        -d "{\"passphrase\":\"$AIRTABLE_PASSPHRASE\",\"operation\":\"listRecords\",\"baseName\":\"Legal Tracker\",\"filterFormula\":\"FIND('[derived name]',{Matter})\"}"
+      curl -sS -G "https://api.airtable.com/v0/appFIB9fJCzTeFDcG/Cases" \
+        -H "Authorization: Bearer $AIRTABLE_API_KEY" \
+        --data-urlencode "filterByFormula=FIND('[derived name]',{Matter})"
       ```
+      (Use `-G` with `--data-urlencode` so the formula is safely URL-encoded — don't hand-encode it into the URL string yourself.)
    3. **Record-match confidence — apply before writing:**
       - **High confidence**: exactly one record returned and its name closely matches the brief item → proceed to step 4.
       - **Low confidence** (do NOT write): zero records found, two or more records returned, or the name match is weak (partial, ambiguous, or the brief item is a topic rather than a named party). Log it in the confirmation block for Chris to review and apply manually in Airtable.
-   4. Call `getSchema` once per run to confirm current field names and select option values — do not guess field names.
+   4. Call the schema endpoint once per run to confirm current field names and select option values — do not guess field names:
+      ```bash
+      curl -sS "https://api.airtable.com/v0/meta/bases/appFIB9fJCzTeFDcG/tables" \
+        -H "Authorization: Bearer $AIRTABLE_API_KEY"
+      ```
    5. For each ALL-CAPS keyword in the item:
-      - `NOTE:` / `NOTES:` → `createRecord` in the **`Case Activity`** table: `Case: [recordId]`, `Entry: <value>`, `Entry Type: "Claude"`, `Activity Date: <today, ISO YYYY-MM-DD>`.
-      - Any other keyword → fuzzy-match it against the `Cases` field list from `getSchema`.
-        - Clear single match → `updateRecord` with that field. Currency fields take plain numbers (not strings); dates use ISO `YYYY-MM-DD`; never write to `Status` (it's a formula field).
+      - `NOTE:` / `NOTES:` → create a record in **`Case Activity`**: `Case` is a link-to-another-record field — pass the linked record ID as an array (`["recXXXXXXXXXXXXXX"]`), not a bare string — plus `Entry: <value>`, `Entry Type: "Claude"`, `Activity Date: <today, ISO YYYY-MM-DD>`:
+        ```bash
+        curl -sS -X POST "https://api.airtable.com/v0/appFIB9fJCzTeFDcG/Case%20Activity" \
+          -H "Authorization: Bearer $AIRTABLE_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "{\"fields\":{\"Case\":[\"<recordId>\"],\"Entry\":\"<value>\",\"Entry Type\":\"Claude\",\"Activity Date\":\"<today>\"}}"
+        ```
+      - Any other keyword → fuzzy-match it against the `Cases` field list from the schema call.
+        - Clear single match → PATCH the record with just that field (PATCH only touches the fields you send, so there's no need to resend the rest of the record). Currency fields take plain numbers (not strings); dates use ISO `YYYY-MM-DD`; never write to `Status` (it's a formula field):
+          ```bash
+          curl -sS -X PATCH "https://api.airtable.com/v0/appFIB9fJCzTeFDcG/Cases/<recordId>" \
+            -H "Authorization: Bearer $AIRTABLE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"fields\":{\"<Field Name>\":<value>}}"
+          ```
         - No clear field match → treat as low confidence. Log the raw keyword and value in the confirmation block rather than guessing at a field.
-   6. If `$AIRTABLE_PASSPHRASE` is not set, skip all Airtable updates and list each unprocessed ALL-CAPS line verbatim at the bottom of today's brief.
+   6. If `$AIRTABLE_API_KEY` is not set, skip all Airtable updates and list each unprocessed ALL-CAPS line verbatim at the bottom of today's brief.
 
    **After processing all replies**, append a confirmation block at the bottom of today's brief (omit any subsection that is empty):
 
@@ -139,10 +162,9 @@ read everything needed from the fired message and Slack directly.
    - `TASK: <description> (due <date>)` → create a Google Task.
      - Resolve `<date>` to `YYYY-MM-DD` (America/New_York); if no date is given or
        it doesn't parse, create the Task with no due date rather than guessing.
-     - Read the shared secret from the Keys sheet (same lookup pattern as
-       `$AIRTABLE_PASSPHRASE` — see `.claude/commands/airtable-manager.md` — the
-       row label here is `SHARED_SECRET`) and export it once per run as
-       `$DAILY_TASKS_SECRET`, then:
+     - Read the shared secret from the Keys sheet (same env-var pattern as
+       `$AIRTABLE_API_KEY` for Airtable calls — the row label here is
+       `SHARED_SECRET`) and export it once per run as `$DAILY_TASKS_SECRET`, then:
        ```bash
        curl -sS -L "https://script.google.com/macros/s/AKfycbyFw0Upbi-AMe_t8inVpqyvJ6mFz2u7ymBGFeS_C58DKLG1Op6wXO2PaGba6X_NiNsjqA/exec" \
          -H "Content-Type: application/json" \
