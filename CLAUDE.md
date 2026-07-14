@@ -76,6 +76,23 @@ State between phases is tracked in `routines/nat-1-1-briefing/state.json`, since
 
 **Note:** Several setup items are still open before this runs in production — see "Open items to resolve before going live" in `prompt.md` (review channel is currently a test channel, the API trigger/bearer token and the Slack Workflow Builder → Sheet → Apps Script chain need to be confirmed as live).
 
+### weekly-accomplishments
+
+**Schedule:** Fridays at 4:30 PM Eastern (America/New_York) — placeholder, adjust to preference
+**Prompt:** `routines/weekly-accomplishments/prompt.md`
+**Config:** `routines/weekly-accomplishments/schedule.yaml`
+
+Sweeps the past 7 days of Gmail, Slack, and Google Drive for MAJOR accomplishments (litigation resolutions, completed launches, cross-functional wins, recognition from Nat/Kaleena/Jonathan, quantifiable business impact) and upserts rows into the **Major Accomplishments 2026** Google Sheet, then drafts (never sends) a summary email to Chris.
+
+**Tracker access:** Never edits the sheet directly. Calls a bound Apps Script web app (`AccomplishmentsTrackerWebApp.gs`, kept alongside the tracker in Drive) over HTTPS via `curl`, authenticated with `$SHARED_SECRET` (set at the environment level, same pattern as `$AIRTABLE_API_KEY`). The webapp exposes `list_entries` (read, for NEW-vs-UPDATE matching), `append_entry` (new row, rejects duplicate names), and `update_entry` (appends to Brief History/Impact, never overwrites) — all formatting (type-based fill, zebra striping, borders, row height) and citation notes are applied server-side by the webapp, not by the routine.
+
+**Required MCP integrations:**
+- Gmail (read threads, search, create draft)
+- Slack (search public and private channels)
+- Google Drive (search files)
+
+**Required environment:** `SHARED_SECRET` set on the environment this routine runs from, matching the Script Property configured in the Apps Script deployment.
+
 ## Adding new routines
 
 1. Create a directory under `routines/<routine-name>/`
