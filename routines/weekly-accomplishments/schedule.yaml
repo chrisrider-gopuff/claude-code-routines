@@ -4,10 +4,14 @@
 # 7 days per prompt.md's review window.
 # Eastern Standard Time  = UTC-5  →  21:30 UTC
 # Eastern Daylight Time  = UTC-4  →  20:30 UTC
-# The harness handles DST automatically when timezone is specified.
 #
-# NOTE: placeholder timing — adjust to preference (e.g. Monday morning instead
-# of Friday afternoon). Also requires:
+# Live as a Routine (trigger id trig_01VTBvXcaXFkFNREHZxA5PbM), cron
+# "30 20 * * 5" (UTC, fixed — not DST-adjusted; revisit the UTC hour when
+# the US switches between EDT/EST if drift matters). Fires into a fresh
+# session each week with the full prompt.md content embedded directly, so
+# no repo checkout is required at run time.
+#
+# Requires:
 #   - $SHARED_SECRET set at the environment level (see prompt.md's Credential
 #     handling section) — same mechanism used for $AIRTABLE_API_KEY elsewhere
 #     in this repo. Must match the Script Property set via setup() in
