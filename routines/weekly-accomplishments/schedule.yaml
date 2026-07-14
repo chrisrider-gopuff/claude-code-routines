@@ -1,0 +1,20 @@
+# Weekly Accomplishments Tracker — schedule configuration
+#
+# Runs weekly, Friday at 4:30 PM Eastern — end of week, covering the trailing
+# 7 days per prompt.md's review window.
+# Eastern Standard Time  = UTC-5  →  21:30 UTC
+# Eastern Daylight Time  = UTC-4  →  20:30 UTC
+# The harness handles DST automatically when timezone is specified.
+#
+# NOTE: placeholder timing — adjust to preference (e.g. Monday morning instead
+# of Friday afternoon). Also requires:
+#   - $SHARED_SECRET set at the environment level (see prompt.md's Credential
+#     handling section) — same mechanism used for $AIRTABLE_API_KEY elsewhere
+#     in this repo. Must match the Script Property set via setup() in
+#     AccomplishmentsTrackerWebApp.gs.
+
+name: weekly-accomplishments
+prompt: routines/weekly-accomplishments/prompt.md
+schedule:
+  cron: "30 16 * * 5"          # 4:30 PM Eastern, Fridays — harness applies timezone below
+  timezone: America/New_York
