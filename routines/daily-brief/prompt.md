@@ -160,12 +160,29 @@ read everything needed from the fired message and Slack directly.
 
 1. Parse `channel_id` and `ts` from `text` per Entry point above — this identifies
    the brief message Chris reacted to.
-2. Read all thread replies Chris posted under that message (same numbered-list
+2. Read the brief message itself (same `channel_id`/`ts`) to get each numbered
+   entry's bold title, description, and source link(s) — this is the basis for
+   anything created from a `TASK:` line below, not an optional nicety. Then
+   read all thread replies Chris posted under that message (same numbered-list
    convention as Step 2 of Phase 1).
 3. For each numbered reply item, scan its lines for `TASK:` and `TIME:`
    (independent of, and in addition to, any `NOTE:`/other ALL-CAPS lines in the
    same item — those are handled separately by tomorrow's Phase 1 run, not here):
-   - `TASK: <description> (due <date>)` → create a Google Task.
+   - `TASK: <optional note> (due <date>)` → create a Google Task grounded in
+     the brief entry Chris is replying to — never in the `TASK:` text alone:
+     - **Title**: build from the entry's bold title and its stated next action
+       (e.g. `Smith settlement demand — send counterdemand draft`). If Chris
+       wrote anything after `TASK:` besides a `(due ...)` clause, treat it as
+       a refinement that edits or narrows the entry-derived title (a more
+       specific instruction, a correction, a different angle) — fold it in;
+       don't discard the entry and use only his words as the title. If he
+       wrote nothing after `TASK:`, the title is built purely from the entry.
+     - **Notes**: always include the entry's underlying source link(s) — the
+       same Gmail/Slack/Calendar link(s) shown under that numbered item in the
+       brief — one per line, plus `From Daily Brief item #<n>`. If the entry
+       was consolidated from multiple sources, include every source link. If
+       the entry genuinely has no source link, write `(source not found)`
+       rather than omitting the notes field.
      - Resolve `<date>` to `YYYY-MM-DD` (America/New_York); if no date is given or
        it doesn't parse, create the Task with no due date rather than guessing.
      - Read the shared secret from the Keys sheet (same env-var pattern as
@@ -174,7 +191,7 @@ read everything needed from the fired message and Slack directly.
        ```bash
        curl -sS -L "https://script.google.com/macros/s/AKfycbyFw0Upbi-AMe_t8inVpqyvJ6mFz2u7ymBGFeS_C58DKLG1Op6wXO2PaGba6X_NiNsjqA/exec" \
          -H "Content-Type: application/json" \
-         -d "{\"token\":\"$DAILY_TASKS_SECRET\",\"action\":\"createTask\",\"title\":\"<description>\",\"due\":\"<YYYY-MM-DD or omit>\",\"tasklistId\":\"ZUFkMExMTVBLbWFMYTRKTA\",\"notes\":\"From Daily Brief item #<n>\"}"
+         -d "{\"token\":\"$DAILY_TASKS_SECRET\",\"action\":\"createTask\",\"title\":\"<entry-grounded title>\",\"due\":\"<YYYY-MM-DD or omit>\",\"tasklistId\":\"ZUFkMExMTVBLbWFMYTRKTA\",\"notes\":\"<source link(s), one per line>\\nFrom Daily Brief item #<n>\"}"
        ```
        (Needs `-L` to follow the redirect; don't force `-X POST` through it or the
        redirect drops the body — same gotcha as the Airtable bridge.)
@@ -190,7 +207,7 @@ read everything needed from the fired message and Slack directly.
    reply under the brief message** (not a new top-level message):
    ```
    ✅ Created from your replies:
-   • Item #3 — Task "Send counterdemand draft" (due 2026-07-17)
+   • Item #3 — Task "Smith settlement demand — send counterdemand draft" (due 2026-07-17)
    • Item #7 — Event "Call with Nat" (Thu Jul 16, 3:00–3:30pm ET)
 
    ⚠️ Could not parse:
