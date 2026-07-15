@@ -55,6 +55,23 @@ A Thread Matches table caches thread→case matches so repeat runs skip re-match
 
 **Required environment:** `AIRTABLE_API_KEY` set on the environment this routine runs from.
 
+### legal-tracker-triage-review
+
+**Schedule:** Weekly, Sunday at 8:00 PM Eastern (America/New_York) — placeholder, adjust to preference
+**Prompt:** `routines/legal-tracker-triage-review/prompt.md`
+**Config:** `routines/legal-tracker-triage-review/schedule.yaml`
+
+Reads the Approved/Not Approved verdicts Chris has set on the `Approved` field (single select: blank / Approved / Not Approved) in **Update Matches** rows, deletes the rows he marked Not Approved, and clusters the rejections into candidate patterns (auto-replies, pure scheduling, internal FYI forwards, etc.). Cumulative pattern counts persist across runs in `routines/legal-tracker-triage-review/state.json` (not checked in — created at runtime), since rejected rows are deleted after processing and can't be re-derived later.
+
+Only once a pattern's cumulative count reaches 5 — and it hasn't also matched an Approved row, which would mean the pattern is too broad — does it propose a specific edit to `legal-tracker-triage/prompt.md` as a pull request, with the rejected examples as evidence. It never edits that file directly and never merges its own PR; Chris reviews and merges like any other change. Rows Chris approved, or hasn't reviewed yet (blank), are never touched.
+
+**Required MCP integrations:**
+- Slack (send message for summary)
+- GitHub (branch, commit, open PR)
+- Gmail/Slack read access, only if an Entry's summary text isn't enough to classify why it was rejected
+
+**Required environment:** `AIRTABLE_API_KEY`, same as `legal-tracker-triage`.
+
 ### nat-1-1-briefing
 
 **Schedule:** Phase 1 runs weekdays at 3:00 AM Eastern (America/New_York); Phases 2–3 fire externally (not on a schedule)  
