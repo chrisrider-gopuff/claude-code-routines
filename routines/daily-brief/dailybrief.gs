@@ -13,7 +13,8 @@
 // cell has changed since the last poll.
 //
 // Setup:
-//   1. Run setDailyBriefRoutineToken() once (edit in the token below first).
+//   1. Set DB_ROUTINE_TOKEN in Script Properties to the bearer token
+//      generated once at claude.ai/code/routines (shown only at creation).
 //   2. Run initializeDailyBriefLastSeenTimestamp() once, so the first real
 //      poll doesn't re-fire on whatever reaction is already sitting in the
 //      sheet.
@@ -22,7 +23,7 @@
 //
 // If this file lives in the same Apps Script project as nat-1-1-briefing's
 // poller, the script property and cache keys below are namespaced with a
-// DAILY_BRIEF_ prefix so the two pollers' state never collides.
+// DB_ prefix so the two pollers' state never collides.
 
 const SHEET_ID = "1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ";
 const ROUTINE_URL = "https://api.anthropic.com/v1/claude_code/routines/trig_01JZAdCp4zmthcHQB9Eh2aKy/fire";
@@ -32,15 +33,15 @@ const TARGET_CHANNEL = "C0B8P0BC0UX"; // #morning-briefing
 // #morning-briefing row's Timestamp changing.
 function checkForNewDailyBriefTriggers() {
   const props = PropertiesService.getScriptProperties();
-  const token = props.getProperty("DAILY_BRIEF_ROUTINE_TOKEN");
-  if (!token) throw new Error("DAILY_BRIEF_ROUTINE_TOKEN not set — run setDailyBriefRoutineToken() once first.");
+  const token = props.getProperty("DB_ROUTINE_TOKEN");
+  if (!token) throw new Error("DB_ROUTINE_TOKEN not set in Script Properties.");
 
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Sheet1");
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return; // header only, nothing to check
 
   const data = sheet.getRange(2, 1, lastRow - 1, 3).getValues(); // Channel, Timestamp, Emoji
-  const lastSeenTimestamp = props.getProperty("DAILY_BRIEF_LAST_SEEN_TIMESTAMP");
+  const lastSeenTimestamp = props.getProperty("DB_LAST_SEEN_TIMESTAMP");
 
   for (const [channel, timestamp, emojiRaw] of data) {
     if (channel !== TARGET_CHANNEL || !timestamp) continue; // not our row — no cross-routine dispatch
@@ -68,13 +69,8 @@ function checkForNewDailyBriefTriggers() {
     // row, not this one) is ignored — daily-brief only has one externally
     // triggered phase.
 
-    props.setProperty("DAILY_BRIEF_LAST_SEEN_TIMESTAMP", timestampStr); // record even on an unrecognized emoji, so it isn't retried forever
+    props.setProperty("DB_LAST_SEEN_TIMESTAMP", timestampStr); // record even on an unrecognized emoji, so it isn't retried forever
   }
-}
-
-function setDailyBriefRoutineToken() {
-  const token = "PASTE_TOKEN_HERE"; // generated once, shown only at creation, in the routine's trigger settings at claude.ai/code/routines
-  PropertiesService.getScriptProperties().setProperty("DAILY_BRIEF_ROUTINE_TOKEN", token);
 }
 
 function initializeDailyBriefLastSeenTimestamp() {
@@ -83,5 +79,5 @@ function initializeDailyBriefLastSeenTimestamp() {
   if (lastRow < 2) return;
   const data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
   const row = data.find(([channel]) => channel === TARGET_CHANNEL);
-  if (row) PropertiesService.getScriptProperties().setProperty("DAILY_BRIEF_LAST_SEEN_TIMESTAMP", String(row[1]));
+  if (row) PropertiesService.getScriptProperties().setProperty("DB_LAST_SEEN_TIMESTAMP", String(row[1]));
 }
