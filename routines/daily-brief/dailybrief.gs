@@ -21,13 +21,17 @@
 //   3. Install checkForNewDailyBriefTriggers as a time-driven trigger
 //      (Triggers -> Add Trigger -> time-driven, every 1-5 minutes).
 //
-// If this file lives in the same Apps Script project as nat-1-1-briefing's
-// poller, the script property and cache keys below are namespaced with a
-// DB_ prefix so the two pollers' state never collides.
+// This file lives in the same Apps Script project as nat-1-1-briefing's
+// poller (both bound to the shared sheet), and Apps Script puts every .gs
+// file's top-level declarations in one global scope — so both the script
+// properties AND the top-level constants below are namespaced with a DB_
+// prefix. Do not rename these to the un-prefixed SHEET_ID/ROUTINE_URL/
+// TARGET_CHANNEL used by the other poller; that collides with a
+// "Identifier '...' has already been declared" syntax error project-wide.
 
-const SHEET_ID = "1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ";
-const ROUTINE_URL = "https://api.anthropic.com/v1/claude_code/routines/trig_01JZAdCp4zmthcHQB9Eh2aKy/fire";
-const TARGET_CHANNEL = "C0B8P0BC0UX"; // #morning-briefing
+const DB_SHEET_ID = "1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ";
+const DB_ROUTINE_URL = "https://api.anthropic.com/v1/claude_code/routines/trig_01JZAdCp4zmthcHQB9Eh2aKy/fire";
+const DB_TARGET_CHANNEL = "C0B8P0BC0UX"; // #morning-briefing
 
 // Installed as a time-driven trigger (see setup above) — polls for the
 // #morning-briefing row's Timestamp changing.
@@ -36,7 +40,7 @@ function checkForNewDailyBriefTriggers() {
   const token = props.getProperty("DB_ROUTINE_TOKEN");
   if (!token) throw new Error("DB_ROUTINE_TOKEN not set in Script Properties.");
 
-  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Sheet1");
+  const sheet = SpreadsheetApp.openById(DB_SHEET_ID).getSheetByName("Sheet1");
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return; // header only, nothing to check
 
@@ -44,7 +48,7 @@ function checkForNewDailyBriefTriggers() {
   const lastSeenTimestamp = props.getProperty("DB_LAST_SEEN_TIMESTAMP");
 
   for (const [channel, timestamp, emojiRaw] of data) {
-    if (channel !== TARGET_CHANNEL || !timestamp) continue; // not our row — no cross-routine dispatch
+    if (channel !== DB_TARGET_CHANNEL || !timestamp) continue; // not our row — no cross-routine dispatch
 
     const timestampStr = String(timestamp);
     if (timestampStr === lastSeenTimestamp) continue; // unchanged since last check — skip
@@ -52,7 +56,7 @@ function checkForNewDailyBriefTriggers() {
     const emoji = String(emojiRaw).trim();
     if (emoji === ":white_check_mark:") {
       const text = `PHASE2 channel_id=${channel} ts=${timestampStr}`;
-      const response = UrlFetchApp.fetch(ROUTINE_URL, {
+      const response = UrlFetchApp.fetch(DB_ROUTINE_URL, {
         method: "post",
         contentType: "application/json",
         headers: {
@@ -74,10 +78,10 @@ function checkForNewDailyBriefTriggers() {
 }
 
 function initializeDailyBriefLastSeenTimestamp() {
-  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Sheet1");
+  const sheet = SpreadsheetApp.openById(DB_SHEET_ID).getSheetByName("Sheet1");
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
   const data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
-  const row = data.find(([channel]) => channel === TARGET_CHANNEL);
+  const row = data.find(([channel]) => channel === DB_TARGET_CHANNEL);
   if (row) PropertiesService.getScriptProperties().setProperty("DB_LAST_SEEN_TIMESTAMP", String(row[1]));
 }
