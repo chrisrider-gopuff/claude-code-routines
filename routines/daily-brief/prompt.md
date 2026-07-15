@@ -195,11 +195,28 @@ read everything needed from the fired message and Slack directly.
        ```
        (Needs `-L` to follow the redirect; don't force `-X POST` through it or the
        redirect drops the body — same gotcha as the Airtable bridge.)
-   - `TIME: <description> at <datetime>` → create a Calendar event directly via
-     the Google Calendar MCP tool (no Apps Script call for this one): resolve
-     `<datetime>` to a start time (America/New_York), default to a 30-minute
-     duration unless a range is given, calendar = chris.rider@gopuff.com primary,
-     title = `<description>`.
+   - `TIME: <optional note> at <datetime>` → create a Calendar event grounded
+     in the brief entry Chris is replying to — never in the `TIME:` text
+     alone, directly via the Google Calendar MCP tool (`create_event`, no Apps
+     Script call for this one):
+     - **Title** (`summary`): build from the entry's bold title and its stated
+       next action (e.g. `Smith settlement demand — call with opposing
+       counsel`). If Chris wrote anything after `TIME:` besides the
+       `at <datetime>` clause, treat it as a refinement that edits or narrows
+       the entry-derived title (a more specific instruction, a correction, a
+       different angle) — fold it in; don't discard the entry and use only
+       his words as the title. If he wrote nothing but the `at <datetime>`
+       clause, the title is built purely from the entry.
+     - **Description** (the event's `description` field): always include the
+       entry's underlying source link(s) — the same Gmail/Slack/Calendar
+       link(s) shown under that numbered item in the brief — one per line,
+       plus `From Daily Brief item #<n>`. If the entry was consolidated from
+       multiple sources, include every source link. If the entry genuinely has
+       no source link, write `(source not found)` rather than omitting the
+       description.
+     - Resolve `<datetime>` to a start time (America/New_York), default to a
+       30-minute duration unless a range is given, calendar =
+       chris.rider@gopuff.com primary.
    - An item can have both a `TASK:` and a `TIME:` line — create both.
    - If a line's date/time genuinely can't be parsed, don't guess — skip creating
      anything for that line and flag it in the confirmation reply instead.
@@ -208,7 +225,7 @@ read everything needed from the fired message and Slack directly.
    ```
    ✅ Created from your replies:
    • Item #3 — Task "Smith settlement demand — send counterdemand draft" (due 2026-07-17)
-   • Item #7 — Event "Call with Nat" (Thu Jul 16, 3:00–3:30pm ET)
+   • Item #7 — Event "Nat 1:1 prep — call with opposing counsel" (Thu Jul 16, 3:00–3:30pm ET)
 
    ⚠️ Could not parse:
    • Item #9 — "TIME: sometime next week" — no specific date/time found
