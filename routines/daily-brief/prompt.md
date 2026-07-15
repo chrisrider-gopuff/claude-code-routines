@@ -220,18 +220,22 @@ read everything needed from the fired message and Slack directly.
    - An item can have both a `TASK:` and a `TIME:` line — create both.
    - If a line's date/time genuinely can't be parsed, don't guess — skip creating
      anything for that line and flag it in the confirmation reply instead.
-4. If at least one Task or Event was created (or flagged), post a **threaded
-   reply under the brief message** (not a new top-level message):
-   ```
-   ✅ Created from your replies:
-   • Item #3 — Task "Smith settlement demand — send counterdemand draft" (due 2026-07-17)
-   • Item #7 — Event "Nat 1:1 prep — call with opposing counsel" (Thu Jul 16, 3:00–3:30pm ET)
+4. Always post a **threaded reply under the brief message** (not a new
+   top-level message), even if nothing was created:
+   - If at least one Task or Event was created or flagged:
+     ```
+     ✅ Created from your replies:
+     • Item #3 — Task "Smith settlement demand — send counterdemand draft" (due 2026-07-17)
+     • Item #7 — Event "Nat 1:1 prep — call with opposing counsel" (Thu Jul 16, 3:00–3:30pm ET)
 
-   ⚠️ Could not parse:
-   • Item #9 — "TIME: sometime next week" — no specific date/time found
-   ```
-   Omit either bullet list if empty. If no `TASK:`/`TIME:` lines were found in any
-   reply, don't post anything — a no-op run should be silent.
+     ⚠️ Could not parse:
+     • Item #9 — "TIME: sometime next week" — no specific date/time found
+     ```
+     Omit either bullet list if empty.
+   - If no `TASK:`/`TIME:` lines were found in any reply (a genuine no-op run):
+     ```
+     No TASK:/TIME: lines found in your replies — no Tasks or Events created.
+     ```
 
 **Config for Phase 2:**
 - Apps Script Tasks bridge:
