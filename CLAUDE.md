@@ -39,7 +39,7 @@ Items that appear in multiple sources are consolidated into a single entry with 
 **Prompt:** `routines/legal-tracker-triage/prompt.md`  
 **Config:** `routines/legal-tracker-triage/schedule.yaml`
 
-Sweeps Gmail and Slack for new case-related developments (48-hour window, extended to cover the weekend on Mondays), matches each to a case in the "Legal Tracker" Airtable base, and writes draft rows into the **Update Matches** table for manual review. Never writes to **Case Activity** — promotion from Update Matches is a manual step Chris performs himself.
+Sweeps Gmail and Slack for new case-related developments (48-hour window, extended to cover the weekend on Mondays), matches each to a case in the "Legal Tracker" Airtable base, and writes draft rows into the **Update Matches** table for manual review. Never writes to **Case Activity** — promotion happens via an Airtable Automation, triggered when Chris sets `Approved` to `Approved` on an Update Matches row, that copies (not moves) the row into Case Activity.
 
 **Airtable access:** Calls the Airtable REST API directly via `curl`, authenticated with `$AIRTABLE_API_KEY` (set at the environment level — never read from a file, sheet, or document, and never echoed/logged). Base: Legal Tracker (`appFIB9fJCzTeFDcG`). Confirms table/field names against the base's live schema before every write.
 
@@ -54,6 +54,27 @@ A Thread Matches table caches thread→case matches so repeat runs skip re-match
 - Slack (search public and private channels; send messages)
 
 **Required environment:** `AIRTABLE_API_KEY` set on the environment this routine runs from.
+
+### legal-tracker-triage-review
+
+**Schedule:** Weekly, Sunday at 8:00 PM Eastern (America/New_York) — placeholder, adjust to preference
+**Prompt:** `routines/legal-tracker-triage-review/prompt.md`
+**Config:** `routines/legal-tracker-triage-review/schedule.yaml`
+
+Reads the Approved/Not Approved verdicts Chris has set on the `Approved` field (single select: blank / Approved / Not Approved) in **Update Matches** rows and learns from both directions — why something was rejected and why something was approved — clustering each into candidate patterns (rejections: auto-replies, pure scheduling, internal FYI forwards; approvals: signals that reliably indicate a valuable update). Cumulative pattern counts for both directions persist across runs in `routines/legal-tracker-triage-review/state.json` (not checked in — created at runtime), since rows are deleted after processing and can't be re-derived later.
+
+A Not Approved row is only deleted once its `Activity Date` is 5+ days old — old enough to be safely outside any daily run's scan window (up to ~4 days on a Monday, which reaches back to the preceding Friday to cover the weekend). Deleting sooner would let the daily routine's dedup logic, which relies on the Thread ID still being in Update Matches, treat the thread as new again and re-log the very row Chris just rejected. Rows younger than 5 days are left marked Not Approved and picked up by a later run.
+
+Approved rows are deleted on a different trigger: not age, but whether the row has actually been promoted (present in Case Activity, checked by Thread ID/Email Link, read-only) AND its approval reasoning has been clustered into `state.json` this run. The Airtable Automation that promotes a row copies it into Case Activity — it does not delete the Update Matches row, so records remain after promotion until this routine explicitly processes and removes them. An Approved row not yet promoted is left untouched indefinitely — deleting it would both destroy a case update pending promotion and reintroduce the recreation risk the age gate exists to prevent for the rejection side.
+
+Only once a pattern's cumulative count reaches 5 — in either direction — and it hasn't also matched a row from the opposite verdict, which would mean the pattern is too broad, does it propose a specific edit to `legal-tracker-triage/prompt.md` as a pull request, with representative examples as evidence. A rejection pattern typically proposes an exclusion rule; an approval pattern typically proposes loosening or strengthening a matching/confidence rule. It never edits that file directly and never merges its own PR; Chris reviews and merges like any other change. Rows Chris hasn't reviewed yet (blank) are never touched.
+
+**Required MCP integrations:**
+- Slack (send message for summary)
+- GitHub (branch, commit, open PR)
+- Gmail/Slack read access, only if an Entry's summary text isn't enough to classify why it was rejected
+
+**Required environment:** `AIRTABLE_API_KEY`, same as `legal-tracker-triage`.
 
 ### nat-1-1-briefing
 
