@@ -185,9 +185,10 @@ read everything needed from the fired message and Slack directly.
        rather than omitting the notes field.
      - Resolve `<date>` to `YYYY-MM-DD` (America/New_York); if no date is given or
        it doesn't parse, create the Task with no due date rather than guessing.
-     - Read the shared secret from the Keys sheet (same env-var pattern as
-       `$AIRTABLE_API_KEY` for Airtable calls — the row label here is
-       `SHARED_SECRET`) and export it once per run as `$DAILY_TASKS_SECRET`, then:
+     - Read the shared secret directly from the `$SHARED_SECRET` environment
+       variable (same pattern as `$AIRTABLE_API_KEY` for Airtable calls — set
+       at the environment level, never read from a file, sheet, or document,
+       and never echoed/logged) and use it as `$DAILY_TASKS_SECRET`, then:
        ```bash
        curl -sS -L "https://script.google.com/macros/s/AKfycbyFw0Upbi-AMe_t8inVpqyvJ6mFz2u7ymBGFeS_C58DKLG1Op6wXO2PaGba6X_NiNsjqA/exec" \
          -H "Content-Type: application/json" \
@@ -278,7 +279,9 @@ read everything needed from the fired message and Slack directly.
 **Config for Phase 2:**
 - Apps Script Tasks bridge:
   `https://script.google.com/macros/s/AKfycbyFw0Upbi-AMe_t8inVpqyvJ6mFz2u7ymBGFeS_C58DKLG1Op6wXO2PaGba6X_NiNsjqA/exec`,
-  shared secret in the Keys sheet under label `SHARED_SECRET`.
+  authenticated with `$SHARED_SECRET` (set at the environment level, matching
+  the Script Property configured in the Apps Script deployment — never read
+  from a file, sheet, or document, and never echoed/logged).
 - Daily Tasks tasklist ID: `ZUFkMExMTVBLbWFMYTRKTA`.
 - Phase trigger sheet (shared with nat-1-1-briefing, each routine has its own
   poller script — see Entry point): `1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ`.
