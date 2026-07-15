@@ -195,18 +195,20 @@ read everything needed from the fired message and Slack directly.
        ```
        (Needs `-L` to follow the redirect; don't force `-X POST` through it or the
        redirect drops the body — same gotcha as the Airtable bridge.)
-   - `TIME: <optional note> at <datetime>` → create a Calendar event grounded
-     in the brief entry Chris is replying to — never in the `TIME:` text
-     alone, directly via the Google Calendar MCP tool (`create_event`, no Apps
-     Script call for this one):
+   - `TIME: <optional note> at <datetime>`, or just `TIME: <vague/relative
+     reference>` (e.g. `tomorrow`, `next week`, `Thursday`, `this week`) →
+     create a Calendar event grounded in the brief entry Chris is replying
+     to — never in the `TIME:` text alone, directly via the Google Calendar
+     MCP tool (`create_event`, no Apps Script call for this one):
      - **Title** (`summary`): build from the entry's bold title and its stated
        next action (e.g. `Smith settlement demand — call with opposing
        counsel`). If Chris wrote anything after `TIME:` besides the
-       `at <datetime>` clause, treat it as a refinement that edits or narrows
-       the entry-derived title (a more specific instruction, a correction, a
+       `at <datetime>` clause (or besides the vague/relative reference
+       itself), treat it as a refinement that edits or narrows the
+       entry-derived title (a more specific instruction, a correction, a
        different angle) — fold it in; don't discard the entry and use only
-       his words as the title. If he wrote nothing but the `at <datetime>`
-       clause, the title is built purely from the entry.
+       his words as the title. If he wrote nothing else, the title is built
+       purely from the entry.
      - **Description** (the event's `description` field): always include the
        entry's underlying source link(s) — the same Gmail/Slack/Calendar
        link(s) shown under that numbered item in the brief — one per line,
@@ -214,24 +216,64 @@ read everything needed from the fired message and Slack directly.
        multiple sources, include every source link. If the entry genuinely has
        no source link, write `(source not found)` rather than omitting the
        description.
-     - Resolve `<datetime>` to a start time (America/New_York), default to a
+     - **If `<datetime>` names a specific time** (e.g. `at 3pm Thursday`, `at
+       2:00pm`): resolve it to a start time (America/New_York), default to a
        30-minute duration unless a range is given, calendar =
-       chris.rider@gopuff.com primary.
+       chris.rider@gopuff.com primary. This is a real meeting time Chris
+       stated explicitly — schedule it as given, no slot-finding below.
+     - **If `<datetime>` is a vague/relative reference with no specific
+       clock time** (`tomorrow`, `next week`, `Thursday`, `this week`, etc.):
+       this means "reserve time for me to work on this" — a solo block, no
+       other attendees, 30 minutes, on chris.rider@gopuff.com primary. Find a
+       slot instead of guessing a time:
+       - **Candidate windows**: Monday–Friday only, 9:30 AM–12:00 PM or
+         1:00 PM–5:00 PM Eastern. Never Saturday/Sunday, never outside those
+         two windows (e.g. never during the 12–1 PM lunch gap).
+       - **Soft rule**: avoid 4:00–5:00 PM on Fridays — only use that slot if
+         every other slot in the resolved day's candidate windows is full.
+       - **Resolving which day**:
+         - A single fixed day (`tomorrow`, a named weekday like `Thursday`):
+           use that literal day. If it falls on a weekend, roll forward to
+           the next business day and say so in the confirmation reply (don't
+           silently reinterpret it).
+         - A week-level reference (`next week`, `this week`) with no specific
+           day named: consider every remaining weekday in that week (for
+           "this week," only days from tomorrow onward — never schedule in
+           the past). Pull each candidate day's existing events (Calendar
+           `list_events`) and rank the days by how open they are — the day
+           with the most total free time across the two candidate windows
+           wins. Prefer the earlier day in the week as a tiebreaker between
+           equally-open days — default to earlier in the week, not later.
+       - **Resolving which slot within the chosen day**: pull that day's
+         existing events and place the 30-minute block in whichever gap
+         within the candidate windows gives it the most breathing room on
+         both sides (the least-crowded stretch, not just the first open
+         slot) — the goal is protected, uninterrupted working time, not a
+         slot wedged between two other meetings.
+       - If the resolved day (or, for a week-level reference, every weekday
+         in that week) has no open slot at all inside the candidate windows,
+         don't guess or force the Friday 4–5 PM fallback past what's
+         available — flag it in the confirmation reply as unable to
+         schedule, same as an unparseable date/time.
    - An item can have both a `TASK:` and a `TIME:` line — create both.
    - If a line's date/time genuinely can't be parsed, don't guess — skip creating
      anything for that line and flag it in the confirmation reply instead.
-4. If at least one Task or Event was created (or flagged), post a **threaded
-   reply under the brief message** (not a new top-level message):
-   ```
-   ✅ Created from your replies:
-   • Item #3 — Task "Smith settlement demand — send counterdemand draft" (due 2026-07-17)
-   • Item #7 — Event "Nat 1:1 prep — call with opposing counsel" (Thu Jul 16, 3:00–3:30pm ET)
+4. Always post a **threaded reply under the brief message** (not a new
+   top-level message), even if nothing was created:
+   - If at least one Task or Event was created or flagged:
+     ```
+     ✅ Created from your replies:
+     • Item #3 — Task "Smith settlement demand — send counterdemand draft" (due 2026-07-17)
+     • Item #7 — Event "Nat 1:1 prep — call with opposing counsel" (Thu Jul 16, 3:00–3:30pm ET)
 
-   ⚠️ Could not parse:
-   • Item #9 — "TIME: sometime next week" — no specific date/time found
-   ```
-   Omit either bullet list if empty. If no `TASK:`/`TIME:` lines were found in any
-   reply, don't post anything — a no-op run should be silent.
+     ⚠️ Could not parse:
+     • Item #9 — "TIME: sometime next week" — no specific date/time found
+     ```
+     Omit either bullet list if empty.
+   - If no `TASK:`/`TIME:` lines were found in any reply (a genuine no-op run):
+     ```
+     No TASK:/TIME: lines found in your replies — no Tasks or Events created.
+     ```
 
 **Config for Phase 2:**
 - Apps Script Tasks bridge:
