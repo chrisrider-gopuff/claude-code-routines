@@ -63,6 +63,8 @@ A Thread Matches table caches thread→case matches so repeat runs skip re-match
 
 Reads the Approved/Not Approved verdicts Chris has set on the `Approved` field (single select: blank / Approved / Not Approved) in **Update Matches** rows, deletes the rows he marked Not Approved, and clusters the rejections into candidate patterns (auto-replies, pure scheduling, internal FYI forwards, etc.). Cumulative pattern counts persist across runs in `routines/legal-tracker-triage-review/state.json` (not checked in — created at runtime), since rejected rows are deleted after processing and can't be re-derived later.
 
+A Not Approved row is only deleted once its `Activity Date` is 5+ days old — old enough to be safely outside any daily run's scan window (up to ~4 days on a Monday, which reaches back to the preceding Friday to cover the weekend). Deleting sooner would let the daily routine's dedup logic, which relies on the Thread ID still being in Update Matches, treat the thread as new again and re-log the very row Chris just rejected. Rows younger than 5 days are left marked Not Approved and picked up by a later run.
+
 Only once a pattern's cumulative count reaches 5 — and it hasn't also matched an Approved row, which would mean the pattern is too broad — does it propose a specific edit to `legal-tracker-triage/prompt.md` as a pull request, with the rejected examples as evidence. It never edits that file directly and never merges its own PR; Chris reviews and merges like any other change. Rows Chris approved, or hasn't reviewed yet (blank), are never touched.
 
 **Required MCP integrations:**

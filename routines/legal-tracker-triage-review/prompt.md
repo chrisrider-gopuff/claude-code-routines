@@ -49,7 +49,13 @@ Same pattern as the daily routine — `curl -H "Authorization: Bearer $AIRTABLE_
 
 ## Step 1: Pull reviewed rows
 
-GET all Update Matches rows where `Approved` is `Approved` or `Not Approved` (formula: `OR({Approved}='Approved',{Approved}='Not Approved')`). Ignore every row where `Approved` is blank — those haven't been reviewed yet and carry no signal. Split into two sets: `approvedRows` and `notApprovedRows`. If both sets are empty, skip to Step 5 and post a short "nothing to review" summary.
+GET all Update Matches rows where `Approved` is `Approved` or `Not Approved`. Ignore every row where `Approved` is blank — those haven't been reviewed yet and carry no signal.
+
+Split into `approvedRows` (every reviewed-approved row, any age) and `notApprovedRows` — but only include a `Not Approved` row in `notApprovedRows` if its `Activity Date` is **5 or more days before today**.
+
+This age gate exists because the daily routine's dedup relies on the Thread ID still being present in Update Matches — deleting a Not Approved row whose underlying message is recent enough to still fall inside a future daily run's scan window (up to ~4 days on a Monday, since that run's window is deliberately extended back to the preceding Friday to cover the weekend) would let the exact same thread get logged right back in the next morning's run, since the Thread Matches cache still has the case mapping cached. A rejected row younger than 5 days is left untouched this run — still marked Not Approved, just not yet processed for counting or deletion — and will be picked up by a later run once it's safely outside any daily run's window. This means Chris's most recent day or two of verdicts won't be cleared out until the following week's run; that's expected, not a bug.
+
+If both `approvedRows` and `notApprovedRows` (after the age gate) are empty, skip to Step 6 and post a short "nothing to review" summary.
 
 ## Step 2: Cluster rejection patterns
 
@@ -99,7 +105,8 @@ Post to Slack channel `C0BGFU05MRU` (#tracker-updates) via `slack_send_message`,
 
 ## Success criteria
 
-- Every `Not Approved` row from this run is deleted; every `Approved`/blank row is untouched.
+- Every `Not Approved` row with an `Activity Date` 5+ days old is deleted; more recent `Not Approved` rows are left for a future run. Every `Approved`/blank row is untouched.
+- No thread whose Update Matches row was deleted this run (or a prior run) gets re-logged by the daily routine — the 5-day age gate exists specifically to guarantee this.
 - `state.json` reflects this run's pattern counts and is safe for the next run to build on.
 - Any pattern crossing the threshold has exactly one PR proposing a specific, evidenced rule change — never applied automatically.
 - A Slack summary has been posted to #tracker-updates, whether or not anything was actionable this run.
