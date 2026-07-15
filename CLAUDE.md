@@ -65,6 +65,8 @@ Reads the Approved/Not Approved verdicts Chris has set on the `Approved` field (
 
 A Not Approved row is only deleted once its `Activity Date` is 5+ days old — old enough to be safely outside any daily run's scan window (up to ~4 days on a Monday, which reaches back to the preceding Friday to cover the weekend). Deleting sooner would let the daily routine's dedup logic, which relies on the Thread ID still being in Update Matches, treat the thread as new again and re-log the very row Chris just rejected. Rows younger than 5 days are left marked Not Approved and picked up by a later run.
 
+Approved rows are deleted on a different trigger: not age, but whether the row has actually made it into Case Activity (checked by Thread ID/Email Link, read-only — the `Promoted` checkbox isn't reliably set, so it's not used). Once present in Case Activity, the Update Matches copy is redundant and safe to delete at any age, since Case Activity's own record already covers the daily routine's dedup. An Approved row not yet in Case Activity is left untouched indefinitely — deleting it would both destroy a case update Chris hasn't finished promoting and reintroduce the same recreation risk the age gate exists to prevent.
+
 Only once a pattern's cumulative count reaches 5 — and it hasn't also matched an Approved row, which would mean the pattern is too broad — does it propose a specific edit to `legal-tracker-triage/prompt.md` as a pull request, with the rejected examples as evidence. It never edits that file directly and never merges its own PR; Chris reviews and merges like any other change. Rows Chris approved, or hasn't reviewed yet (blank), are never touched.
 
 **Required MCP integrations:**
