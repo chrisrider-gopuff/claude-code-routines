@@ -27,6 +27,8 @@ Items that appear in multiple sources are consolidated into a single entry with 
 - Gmail (read threads, search)
 - Slack (search public and private channels, DMs, group DMs; send DMs)
 
+**Required environment:** `SHARED_SECRET` — same value as `weekly-accomplishments`, set on the environment this routine runs from, matching the Script Property configured in the Daily Tasks bridge Apps Script deployment. Used by Phase 2 (see `prompt.md`) to authenticate Task-creation calls.
+
 **Filtering rules enforced:**
 - Excludes direct Yardstik support emails (`support@yardstik.com`)
 - Excludes Workers Comp emails where the user is only CC'd with no personal reply
