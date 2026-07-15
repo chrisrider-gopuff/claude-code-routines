@@ -39,7 +39,7 @@ Before every write, `GET https://api.airtable.com/v0/meta/bases/appFIB9fJCzTeFDc
 **Tables (as of this writing):**
 - **Cases** — `tblmPLdw7pLLnAyFs` (Matter, Status [Active/Closed])
 - **Opposing Counsel** — `tblsoAKlODdngAkha` (Firm Name, Primary Contact Email, Cases)
-- **Update Matches** — `tblsut7WUh6RY79yB` — WRITE TARGET. Fields: Case (link), Activity Date, Entry, Entry Type (single select: Email / Slack / Claude), Email Link, Match Confidence (Low Confidence / Medium Confidence / No Confidence), Thread ID. Leave Author, Approved, Promoted blank. Entry Type is exactly "Email" for Gmail-sourced rows or "Slack" for Slack-sourced rows.
+- **Update Matches** — `tblsut7WUh6RY79yB` — WRITE TARGET. Fields: Case (link), Activity Date, Entry, Entry Type (single select: Email / Slack / Claude), Email Link, Match Confidence (Low Confidence / Medium Confidence / No Confidence), Thread ID, Author. Set Author to "Chris Rider" on every new row. Leave Approved, Promoted blank. Entry Type is exactly "Email" for Gmail-sourced rows or "Slack" for Slack-sourced rows.
 - **Case Activity** — `tbloWeypaXdh1XGjS` — READ ONLY, used only to check for already-logged Thread IDs (via the Email Link field).
 - **Thread Matches** — `tblFmKkZOhmf3XzKx` — sticky cache. Once a Gmail thread or Slack thread is matched to a case, write it here (Thread ID, Cases, Matter Name, Entry Snippet, Created At) so future runs skip re-matching that thread and go straight to the cached case.
 
@@ -81,6 +81,7 @@ For each matched, non-duplicate item, POST a new row to Update Matches:
 - **Email Link:** Gmail permalink (`https://mail.google.com/mail/u/0/#all/<threadId>`) or Slack permalink
 - **Match Confidence:** "Medium Confidence" for a strong single-case match (opposing counsel email, or explicit name/number), "Low Confidence" for a weaker single-case match, "No Confidence" if multiple candidate cases are linked or no case could be identified
 - **Thread ID:** the Gmail thread ID or Slack thread identifier
+- **Author:** "Chris Rider"
 
 For any newly-matched thread not already in the Thread Matches cache, also POST a row to Thread Matches (Thread ID, Cases, Matter Name, Entry Snippet, Created At = today).
 
@@ -98,7 +99,7 @@ Message (Slack markdown, under 200 words):
 
 ## Constraints
 
-- Write only to Update Matches and Thread Matches. Never write to Case Activity. Never set Approved or Promoted.
+- Write only to Update Matches and Thread Matches. Never write to Case Activity. Author is always "Chris Rider"; never set Approved or Promoted.
 - Never modify existing rows anywhere — only add new ones.
 - Only match against Active cases, unless a Closed case's thread is already cached in Thread Matches.
 - When in doubt, don't create a row — missed items are cheaper than noise in Chris's review queue. EXCEPTION: a Gmail thread carrying the `!update` label must always get a row, even if no case can be identified — see Step 3.
