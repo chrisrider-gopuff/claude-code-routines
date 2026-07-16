@@ -1,0 +1,17 @@
+# Weekly Briefing — schedule configuration
+#
+# Runs weekly, Monday morning Eastern — a step-back review of the past week's
+# #morning-briefing posts, once daily-brief has already covered the day-to-day.
+# Eastern Standard Time  = UTC-5  ->  14:00 UTC
+# Eastern Daylight Time  = UTC-4  ->  13:00 UTC
+# The harness handles DST automatically when timezone is specified.
+#
+# NOTE: formalized from a pre-existing webui-only Routine (trigger id
+# trig_01D4TH75Vh1UdrxhWnXaVmfz, cron "0 13 * * 1" UTC, fixed — not
+# DST-adjusted) that had no corresponding file in this repo until now.
+
+name: weekly-briefing
+prompt: routines/weekly-briefing/prompt.md
+schedule:
+  cron: "0 9 * * 1"          # 9:00 AM Eastern, Mondays — harness applies timezone below
+  timezone: America/New_York
