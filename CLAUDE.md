@@ -84,27 +84,27 @@ Only once a pattern's cumulative count reaches 5 — in either direction — and
 
 ### nat-1-1-briefing
 
-**Schedule:** Phase 1 runs weekdays at 3:00 AM Eastern (America/New_York); Phases 2–3 fire externally (not on a schedule)  
+**Schedule:** Weekdays at 3:00 AM Eastern (America/New_York), one fresh session covers the whole routine  
 **Prompt:** `routines/nat-1-1-briefing/prompt.md`  
 **Config:** `routines/nat-1-1-briefing/schedule.yaml`
 
-Prepares Chris Rider's briefing ahead of his recurring 1:1 with Nat Flandreau, in three phases:
-1. **Draft** (schedule-triggered) — if today's calendar has the Chris/Nat 1:1, sweeps the Legal Tracker Airtable base plus #morning-briefing and #weekly-briefing Slack channels for new/changed matters, dedupes by fact pattern (not name/keyword), classifies each item as New/Old business and New case/Update/Discussion, and posts a numbered draft to a review channel.
-2. **Finalize** (fired externally via a :100: Slack reaction → Workflow Builder → Google Sheet → Apps Script → API call) — applies Chris's thread-reply edits (drop/revise/`NS:` note) and posts a final version for approval.
-3. **Publish** (fired externally via a :white_check_mark: reaction, same trigger chain) — posts the approved final version into #chris-nat-1to1 as the permanent record, which also serves as the Old Business source for future runs.
+Prepares Chris Rider's briefing ahead of his recurring 1:1 with Nat Flandreau, entirely within one chat session (no external trigger chain, no cross-session state file):
+1. **Build and present the draft** — if today's calendar has the Chris/Nat 1:1, sweeps the Legal Tracker Airtable base plus #morning-briefing and #weekly-briefing Slack channels for new/changed matters, dedupes by fact pattern (not name/keyword), classifies each item as New/Old business and New case/Update/Discussion, and presents a numbered draft directly in chat.
+2. **Incorporate edits** — Chris edits conversationally in the same session, mixing numbered commands (drop/revise/`NS:` note) with free text for new items, across as many rounds as needed.
+3. **Publish on request** — once Chris says to post/publish, sends the current draft to #chris-nat-1to1 as the permanent record, which also serves as the sole Old Business source for future runs (no seed document).
 
-State between phases is tracked in `routines/nat-1-1-briefing/state.json`, since each phase may run in a fresh session.
+A previous three-phase version of this routine (schedule-triggered draft, then Slack-reaction-driven finalize/publish via Workflow Builder → Google Sheet → Apps Script → API, with phase state in `state.json`) is preserved for reference at `routines/nat-1-1-briefing/prompt.deprecated.md` but is no longer used.
 
 **Required MCP integrations:**
 - Google Calendar (check for today's Chris/Nat 1:1)
 - Slack (read/search channels, send messages)
-- Google Drive (one-time seed doc read on first-ever run; also `read_file_content` on the Secrets Sheet each Phase 1 run — a whole-file read, since no scoped-read tool exists for Sheets in this environment)
+- Google Drive (`read_file_content` on the Secrets Sheet each run — a whole-file read, since no scoped-read tool exists for Sheets in this environment; see "Airtable access" below)
 
-**Airtable access:** Phase 1 reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the `airtable-mcp` skill/server, read-only — never holds `AIRTABLE_API_KEY` directly. Uses the `unsupervised` tier token: Phase 1 runs on a schedule with no human present and never needs to write to Airtable at all, so the more restrictive token costs nothing functionally. Phases 2–3 don't touch Airtable.
+**Airtable access:** Reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the `airtable-mcp` skill/server, read-only — never holds `AIRTABLE_API_KEY` directly. Uses the `unsupervised` tier token even though this routine never needs to write to Airtable at all, so the more restrictive token costs nothing functionally.
 
 **Required environment:** `AIRTABLE_MCP_URL` (not secret). Same as `legal-tracker-triage`, the `unsupervised` tier token is looked up from the Secrets Sheet at runtime, not held as an environment variable.
 
-**Note:** Several setup items are still open before this runs in production — see "Open items to resolve before going live" in `prompt.md` (review channel is currently a test channel, the API trigger/bearer token and the Slack Workflow Builder → Sheet → Apps Script chain need to be confirmed as live).
+**Note:** The routine's live scheduled trigger should be configured to spawn a fresh session on each fire (not resume a persistent session), since each weekday's draft/edit/publish cycle is self-contained.
 
 ### weekly-accomplishments
 

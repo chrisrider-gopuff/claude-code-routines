@@ -1,10 +1,11 @@
 # Nat 1:1 Briefing — schedule configuration
 #
-# Phase 1 (build + post draft) runs every weekday (Mon–Fri) at 3:00 AM Eastern.
-# Phases 2 and 3 are NOT time-triggered — they fire externally via the
-# routine's API endpoint (Slack emoji reaction -> Workflow Builder ->
-# Google Sheet -> Apps Script -> API), per the Entry point section in
-# prompt.md. This schedule only covers the Phase 1 trigger.
+# Fires once, every weekday (Mon–Fri) at 3:00 AM Eastern, into a fresh
+# session. That single session covers the whole routine end to end: it
+# builds and presents the draft, Chris edits it conversationally in the
+# same session, and Chris tells Claude to publish when ready (see
+# prompt.md). There is no external trigger and no separate API-fired
+# phase — this is the only schedule this routine needs.
 #
 # Eastern Standard Time  = UTC-5  ->  08:00 UTC
 # Eastern Daylight Time  = UTC-4  ->  07:00 UTC
