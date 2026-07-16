@@ -186,6 +186,21 @@ of truth, since it now lives in Script Properties rather than code), plus
 deployment and testing steps for standing up a new deployment against a
 different base.
 
+`AIRTABLE_MCP_URL` (the deployment's `.../exec` URL) is not secret, so it
+doesn't need Secrets-Sheet-style indirection — it's set as a plain
+environment variable independently on each of the three routines' own
+environments. That's three copies to keep in sync, but the risk is smaller
+than it looks: Apps Script only changes a deployment's URL when you create
+a brand-new deployment, not when you push an updated version to an
+existing one (Manage deployments → Edit → new version), so three
+independent copies is an acceptable trade-off rather than something worth
+building indirection for. The one thing worth doing once this deployment
+actually exists: record the real URL as a concrete value in
+`mcp-servers/airtable-mcp/README.md`'s "Worked example" section, alongside
+`AIRTABLE_BASE_ID`, so each environment's copy has one documented place to
+be copied from — not "ask Chris" as the only way to find the current
+value. No deployment exists yet, so that value isn't filled in there yet.
+
 None of the three callers hold the `unsupervised` token as a plain
 environment variable — each looks it up at the start of its run from a
 private, single-owner Secrets Sheet (Google Sheet, owned solely by Chris)

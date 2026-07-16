@@ -116,10 +116,11 @@ server-side, and for how to stand up a new deployment for a different base.
 - **Legal Tracker** (`appFIB9fJCzTeFDcG`) — used by `legal-tracker-triage`,
   `legal-tracker-triage-review`, and `nat-1-1-briefing`. Tables: `Update
   Matches`, `Case Activity`, `Thread Matches`, `Cases`, `Opposing Counsel`.
-  The actual `AIRTABLE_MCP_CONFIG` for this deployment (which tier can
-  write/delete where, and why) is documented in
+  The actual `AIRTABLE_MCP_CONFIG` and `AIRTABLE_MCP_URL` for this
+  deployment (which tier can write/delete where, and the current
+  deployment URL to copy into each caller's environment) are documented in
   `mcp-servers/airtable-mcp/README.md`'s "Worked example" section — that
-  file, not this one, is the source of truth for its current value.
+  file, not this one, is the source of truth for their current values.
   **Token sourcing:** none of these three callers hold `AIRTABLE_MCP_TOKEN`
   as a plain environment variable — they look up the `unsupervised` token
   at the start of each run from a private, single-owner Secrets Sheet via
