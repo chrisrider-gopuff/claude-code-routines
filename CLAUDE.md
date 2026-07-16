@@ -116,6 +116,30 @@ Sweeps the past 7 days of Gmail, Slack, and Google Drive for MAJOR accomplishmen
 
 **Required environment:** `SHARED_SECRET` set on the environment this routine runs from, matching the Script Property configured in the Apps Script deployment.
 
+## MCP servers
+
+### airtable-legal-tracker
+
+**Code:** `mcp-servers/airtable-legal-tracker/AirtableMcpServer.gs`
+
+An Apps Script Web App that proxies the Legal Tracker Airtable base
+(`appFIB9fJCzTeFDcG`) for a Cowork plugin built from this repo, so plugin
+installers can query/write Legal Tracker data without ever holding
+`AIRTABLE_API_KEY` themselves. Installers authenticate to this proxy with a
+separate front-door token (`AIRTABLE_MCP_TOKEN`, passed as a `token`
+query-string parameter — Apps Script Web Apps can't read custom request
+headers); only this script holds the real Airtable key. Writes are
+restricted in code to the `Update Matches` table — never `Case Activity`,
+which is only ever written by the Airtable Automation that promotes an
+approved row (see `legal-tracker-triage`'s prompt.md).
+
+This is unrelated to the `AIRTABLE_API_KEY` environment variable used by
+`legal-tracker-triage`/`legal-tracker-triage-review` when they run as
+native Claude Code routines — those continue to call Airtable directly.
+This server exists only for the Cowork-plugin distribution path. See
+`mcp-servers/airtable-legal-tracker/README.md` for deployment and testing
+steps.
+
 ## Adding new routines
 
 1. Create a directory under `routines/<routine-name>/`
