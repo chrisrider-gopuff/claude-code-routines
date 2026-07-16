@@ -99,8 +99,12 @@ before assuming it's a permissions issue.
 ## Required environment (native-routine / curl path only)
 
 - `AIRTABLE_MCP_URL` — the Apps Script Web App deployment URL for the base
-  this caller needs (no query string). Not secret, always a plain
-  environment variable.
+  this caller needs (no query string). Not secret, but sourcing still
+  varies by deployment — check that deployment's entry below rather than
+  assuming a bare environment variable. Some deployments source it from a
+  runtime secrets lookup instead, alongside the token, purely for
+  operational convenience (one editable value instead of one env var per
+  caller), not because the URL itself needs protecting.
 - `AIRTABLE_MCP_TOKEN` — whichever tier's token matches this caller's trust
   level. Never the raw `AIRTABLE_API_KEY`. Sourcing varies by deployment and
   caller — some are a plain environment variable set at the environment
@@ -121,17 +125,17 @@ server-side, and for how to stand up a new deployment for a different base.
   deployment URL to copy into each caller's environment) are documented in
   `mcp-servers/airtable-mcp/README.md`'s "Worked example" section — that
   file, not this one, is the source of truth for their current values.
-  **Token sourcing:** none of these three callers hold `AIRTABLE_MCP_TOKEN`
-  as a plain environment variable — they look up the `unsupervised` token
+  **Sourcing:** none of these three callers hold `AIRTABLE_MCP_URL` or
+  `AIRTABLE_MCP_TOKEN` as plain environment variables — they look up both
   at the start of each run from a private, single-owner Secrets Sheet via
   the Google Drive MCP's `read_file_content` (a whole-file read — no
   Google Sheets MCP connector or range-scoped read tool exists in this
   environment). The sheet also holds unrelated secrets for other systems;
-  each routine's prompt is explicit that only the row named
-  `AIRTABLE_MCP_TOKEN_UNSUPERVISED` may ever be used or referenced, though
-  that's prompt-level discipline, not something the read itself restricts.
-  See `mcp-servers/airtable-mcp/README.md` and each routine's `prompt.md`
-  for the exact steps.
+  each routine's prompt is explicit that only the rows named
+  `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN_UNSUPERVISED` may ever be used
+  or referenced, though that's prompt-level discipline, not something the
+  read itself restricts. See `mcp-servers/airtable-mcp/README.md` and each
+  routine's `prompt.md` for the exact steps.
 
 Add an entry here whenever a new base gets its own deployment, so a caller
 can find the right one without reading every routine's prompt.md.
