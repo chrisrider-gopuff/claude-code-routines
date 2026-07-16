@@ -53,7 +53,7 @@
 
 const AIRTABLE_BASE_ID = "appFIB9fJCzTeFDcG"; // Legal Tracker
 
-const READ_TABLES = ["Update Matches", "Case Activity", "Thread Matches", "Cases"];
+const READ_TABLES = ["Update Matches", "Case Activity", "Thread Matches", "Cases", "Opposing Counsel"];
 
 const TIERS = {
   // Thread Matches is legal-tracker-triage's own match-caching table (low
@@ -73,16 +73,22 @@ const DELETE_TABLES = ["Update Matches"];
 const TOOL_DEFINITIONS = [
   {
     name: "airtable_query",
-    description: "Query records from a table in the Legal Tracker Airtable base.",
+    description: "Query records from a table in the Legal Tracker Airtable base. Airtable pages at 100 records — if the response includes an offset field, call again with that offset to get the next page.",
     inputSchema: {
       type: "object",
       properties: {
         table: { type: "string", description: "Table name, e.g. 'Update Matches'" },
         filterByFormula: { type: "string", description: "Airtable filterByFormula expression (optional)" },
-        maxRecords: { type: "number", description: "Max records to return (optional, default 20)" }
+        maxRecords: { type: "number", description: "Max records to return in total across all pages (optional, default 20)" },
+        offset: { type: "string", description: "Pagination offset from a previous response's offset field (optional)" }
       },
       required: ["table"]
     }
+  },
+  {
+    name: "airtable_get_schema",
+    description: "Fetch the live table/field schema for the Legal Tracker base, so a caller can detect drift (renamed table/field) before assuming a hardcoded name is still correct. Read-only, no table restriction.",
+    inputSchema: { type: "object", properties: {} }
   },
   {
     name: "airtable_create_record",
@@ -168,19 +174,26 @@ function resolveTier(token) {
 
 function callTool(tier, name, args) {
   if (name === "airtable_query") return airtableQuery(args);
+  if (name === "airtable_get_schema") return airtableGetSchema();
   if (name === "airtable_create_record") return airtableCreateRecord(tier, args);
   if (name === "airtable_update_record") return airtableUpdateRecord(tier, args);
   if (name === "airtable_delete_record") return airtableDeleteRecord(args);
   throw new Error("Unknown tool: " + name);
 }
 
-function airtableQuery({ table, filterByFormula, maxRecords }) {
+function airtableQuery({ table, filterByFormula, maxRecords, offset }) {
   if (!READ_TABLES.includes(table)) {
     throw new Error(`Table "${table}" is not in READ_TABLES.`);
   }
   const params = [`maxRecords=${maxRecords || 20}`];
   if (filterByFormula) params.push("filterByFormula=" + encodeURIComponent(filterByFormula));
+  if (offset) params.push("offset=" + encodeURIComponent(offset));
   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(table)}?${params.join("&")}`;
+  return { content: [{ type: "text", text: airtableFetch(url, "get") }] };
+}
+
+function airtableGetSchema() {
+  const url = `https://api.airtable.com/v0/meta/bases/${AIRTABLE_BASE_ID}/tables`;
   return { content: [{ type: "text", text: airtableFetch(url, "get") }] };
 }
 

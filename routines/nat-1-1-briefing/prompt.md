@@ -79,7 +79,7 @@ or fired before the prior phase ran).
 - Chris Rider: `chris.rider@gopuff.com`, Slack user ID `U0AHNL8LD53`.
 - Nat Flandreau: `nat.flandreau@gopuff.com`.
 - Seed doc (one-time-only, first run ever): Google Doc `1YsxxdHjeB8iIAMZhvIdxqUPSBqKplgWozb00CtUlNJg`. Marker file `seed-doc-used.txt` in this routine's directory -- if it doesn't exist, this is the first real run of Phase 1; read the seed doc and merge its matters/topics into Old Business, then write the marker file after Phase 1 completes. If it exists, skip the doc -- Old Business comes only from #chris-nat-1to1 channel history.
-- Legal Tracker (Airtable): base `appFIB9fJCzTeFDcG`, table `tblmPLdw7pLLnAyFs` ("Cases"). Use the airtable-manager skill/pattern for all reads.
+- Legal Tracker (Airtable): base `appFIB9fJCzTeFDcG`, table "Cases". Use the `airtable-legal-tracker` skill for all reads (`airtable_query`) — this routine never holds `AIRTABLE_API_KEY` directly, and runs with the `unattended` tier token (`$AIRTABLE_MCP_TOKEN`/`$AIRTABLE_MCP_URL`) even though Phase 1 only ever reads, never writes, since there's no reason to hold a token capable of more than that.
 - #morning-briefing: channel ID `C0B8P0BC0UX`.
 - #weekly-briefing: channel ID `C0BFUJ8LYJV`.
 - Phase trigger sheet: Google Sheet `1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ` (columns Channel, Timestamp, Emoji), fed by a Slack Workflow Builder emoji-reaction workflow on the review channel and read by a Google Apps Script `onEdit` trigger that calls this routine's API endpoint.

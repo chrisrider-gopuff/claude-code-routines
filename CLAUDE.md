@@ -43,7 +43,7 @@ Items that appear in multiple sources are consolidated into a single entry with 
 
 Sweeps Gmail and Slack for new case-related developments (48-hour window, extended to cover the weekend on Mondays), matches each to a case in the "Legal Tracker" Airtable base, and writes draft rows into the **Update Matches** table for manual review. Never writes to **Case Activity** — promotion happens via an Airtable Automation, triggered when Chris sets `Approved` to `Approved` on an Update Matches row, that copies (not moves) the row into Case Activity.
 
-**Airtable access:** Calls the Airtable REST API directly via `curl`, authenticated with `$AIRTABLE_API_KEY` (set at the environment level — never read from a file, sheet, or document, and never echoed/logged). Base: Legal Tracker (`appFIB9fJCzTeFDcG`). Confirms table/field names against the base's live schema before every write.
+**Airtable access:** Goes through the `airtable-legal-tracker` skill/server (see "MCP servers" and "Skills" below) using the `unattended` tier — never holds `AIRTABLE_API_KEY` directly. Confirms table/field names against the live schema (`airtable_get_schema`) before assuming a hardcoded name is still correct.
 
 **Matching sources:**
 1. Gmail — sender/recipient vs. Opposing Counsel contact email, Matter/claimant name, case number, or the Gmail label `!update` (always logged, even unmatched, flagged for manual case assignment)
@@ -55,7 +55,7 @@ A Thread Matches table caches thread→case matches so repeat runs skip re-match
 - Gmail (read threads, search)
 - Slack (search public and private channels; send messages)
 
-**Required environment:** `AIRTABLE_API_KEY` set on the environment this routine runs from.
+**Required environment:** `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN` (holding the `unattended` tier's token) set on the environment this routine runs from — see `mcp-servers/airtable-legal-tracker/README.md`.
 
 ### legal-tracker-triage-review
 
@@ -71,12 +71,14 @@ Approved rows are deleted on a different trigger: not age, but whether the row h
 
 Only once a pattern's cumulative count reaches 5 — in either direction — and it hasn't also matched a row from the opposite verdict, which would mean the pattern is too broad, does it propose a specific edit to `legal-tracker-triage/prompt.md` as a pull request, with representative examples as evidence. A rejection pattern typically proposes an exclusion rule; an approval pattern typically proposes loosening or strengthening a matching/confidence rule. It never edits that file directly and never merges its own PR; Chris reviews and merges like any other change. Rows Chris hasn't reviewed yet (blank) are never touched.
 
+**Airtable access:** Goes through the `airtable-legal-tracker` skill/server, same as `legal-tracker-triage` — read-only plus deletes on Update Matches, never holds `AIRTABLE_API_KEY` directly. Uses the `unattended` tier token, not `supervised`, even though it doesn't need Case Activity/Cases write access — it also runs on a schedule with no human present and occasionally reads Gmail/Slack content for classification, so the more restrictive token is the consistent choice even though it's not strictly required for what this routine does.
+
 **Required MCP integrations:**
 - Slack (send message for summary)
 - GitHub (branch, commit, open PR)
 - Gmail/Slack read access, only if an Entry's summary text isn't enough to classify why it was rejected
 
-**Required environment:** `AIRTABLE_API_KEY`, same as `legal-tracker-triage`.
+**Required environment:** `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN` (the `unattended` tier's token, same value as `legal-tracker-triage`).
 
 ### nat-1-1-briefing
 
@@ -94,8 +96,11 @@ State between phases is tracked in `routines/nat-1-1-briefing/state.json`, since
 **Required MCP integrations:**
 - Google Calendar (check for today's Chris/Nat 1:1)
 - Slack (read/search channels, send messages)
-- Airtable Legal Tracker (`appFIB9fJCzTeFDcG`) — read-only for this routine
 - Google Drive (one-time seed doc read on first-ever run)
+
+**Airtable access:** Phase 1 reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the `airtable-legal-tracker` skill/server, read-only — never holds `AIRTABLE_API_KEY` directly. Uses the `unattended` tier token: Phase 1 runs on a schedule with no human present and never needs to write to Airtable at all, so the more restrictive token costs nothing functionally. Phases 2–3 don't touch Airtable.
+
+**Required environment:** `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN` (the `unattended` tier's token, same value as `legal-tracker-triage`).
 
 **Note:** Several setup items are still open before this runs in production — see "Open items to resolve before going live" in `prompt.md` (review channel is currently a test channel, the API trigger/bearer token and the Slack Workflow Builder → Sheet → Apps Script chain need to be confirmed as live).
 
@@ -154,12 +159,17 @@ deleting stale or already-promoted rows there is `legal-tracker-triage-review`'s
 whole job), but nothing can delete from `Case Activity` or `Cases` through
 this proxy, regardless of tier.
 
-`legal-tracker-triage`/`legal-tracker-triage-review` currently call
-Airtable directly with their own `AIRTABLE_API_KEY` rather than through this
-server — consolidating them onto it (as the "one point of contact" this
-server is meant to be) is a follow-up, not yet done. See
-`mcp-servers/airtable-legal-tracker/README.md` for deployment and testing
-steps.
+Reads (`airtable_query`) cover `Update Matches`, `Case Activity`,
+`Thread Matches`, `Cases`, and `Opposing Counsel`, and page via Airtable's
+own `offset` mechanism for tables over ~100 rows. `airtable_get_schema` is
+unrestricted (read-only metadata) and lets a caller detect a renamed
+table/field before trusting a hardcoded name.
+
+`legal-tracker-triage`, `legal-tracker-triage-review`, and
+`nat-1-1-briefing` now go through this server (via the
+`airtable-legal-tracker` skill below) instead of holding `AIRTABLE_API_KEY`
+directly. See `mcp-servers/airtable-legal-tracker/README.md` for deployment
+and testing steps.
 
 ## Skills
 

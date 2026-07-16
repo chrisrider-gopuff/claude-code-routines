@@ -36,7 +36,13 @@ The same per-tier table list governs both `airtable_create_record` and
 update existing records there, and vice versa.
 
 Both tiers can read all tables (`Update Matches`, `Case Activity`,
-`Thread Matches`, `Cases`) — the tier only restricts writes.
+`Thread Matches`, `Cases`, `Opposing Counsel`) — the tier only restricts
+writes. `airtable_query` also pages: Airtable caps a single response at 100
+records regardless of `maxRecords`, so a table like Cases (~120 rows) needs
+a follow-up call with the previous response's `offset` to get the rest.
+`airtable_get_schema` is unrestricted for either tier (read-only metadata),
+for callers that need to detect a renamed table/field before trusting a
+hardcoded name.
 
 Deletes are separate from the tier model above: either tier can delete from
 `Update Matches` (it's a draft/staging table — that's literally

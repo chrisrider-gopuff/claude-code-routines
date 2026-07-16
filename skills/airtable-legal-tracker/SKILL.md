@@ -46,7 +46,8 @@ from that file, the file wins; update this doc to match.
 
 | Tool | Arguments | Notes |
 |---|---|---|
-| `airtable_query` | `table` (required), `filterByFormula` (optional, Airtable formula syntax), `maxRecords` (optional, default 20) | Any table: `Update Matches`, `Case Activity`, `Thread Matches`, `Cases`. Both tiers can always read. |
+| `airtable_query` | `table` (required), `filterByFormula` (optional), `maxRecords` (optional, default 20), `offset` (optional) | Any table: `Update Matches`, `Case Activity`, `Thread Matches`, `Cases`, `Opposing Counsel`. Both tiers can always read. Airtable pages at 100 records regardless of `maxRecords` — if the response has an `offset` field, call again passing it to get the next page; a table with more than ~100 rows (e.g. Cases) needs this loop, don't assume one call got everything. |
+| `airtable_get_schema` | none | Returns the live table/field schema. Call this before trusting a hardcoded table/field name if you suspect it may have changed — Chris renames and re-configures fields periodically — rather than discovering the drift from a failed write. |
 | `airtable_create_record` | `table`, `fields` (object) | Writable tables depend on caller tier — see "Tiers" below. |
 | `airtable_update_record` | `table`, `recordId`, `fields` (object, partial update) | Same tier scoping as create. |
 | `airtable_delete_record` | `table`, `recordId` | `Update Matches` only, for any caller — Case Activity and Cases can never be deleted through this server. |
