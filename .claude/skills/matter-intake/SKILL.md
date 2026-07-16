@@ -20,8 +20,17 @@ or confirms the Airtable record, collects Drive folder and matter details, then 
 This skill will grow over time. Future intake steps (calendar deadlines, folder structure checks,
 outside counsel notification) will be added here. The discovery tracker step is always last.
 
-Read `airtable-manager` SKILL.md before any Airtable calls:
-`C:\Users\ChrisRider\AppData\Roaming\Claude\local-agent-mode-sessions\skills-plugin\...\skills\airtable-manager\SKILL.md`
+Read the `airtable-mcp` skill (`skills/airtable-mcp/SKILL.md`) before any Airtable calls. This
+skill is a `supervised`-tier caller of the Legal Tracker deployment (base `appFIB9fJCzTeFDcG`) —
+the same base every cloud routine in this repo uses, reached through the proxy instead of holding
+`AIRTABLE_API_KEY` directly.
+
+**Getting the `supervised` token:** not a plain environment variable — look it up from the private
+Secrets Sheet (ID `1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`) via the `google-sheets` skill
+(Desktop Commander/PowerShell, available in this execution context). Unlike the cloud routines,
+which have to whole-file-read the sheet through Google Drive, use the `google-sheets` skill's
+scoped read to fetch only the single row labeled `AIRTABLE_MCP_TOKEN_SUPERVISED` — never any other
+row or the sheet's contents in general.
 
 ---
 
@@ -47,8 +56,10 @@ If no document is attached, ask for: claimant name, claim type, and Gopuff entit
 
 ## Step 2 — Search Airtable
 
-Use `airtable-manager` → `searchRecords` on `Matter` field with claimant's last name.
-Try "Last, First" format first, then last name only. Apply fuzzy matching.
+Call `airtable_query` on the `Cases` table with a `filterByFormula` that matches the claimant's
+last name against the `Matter` field, e.g. `SEARCH(LOWER("smith"), LOWER({Matter}))` for a
+case-insensitive contains match. Try "Last, First" format first, then last name only. Apply fuzzy
+matching on the returned rows.
 
 **Match found:** Confirm with Chris: *"Found [Matter] in the tracker — is this the right record?"*
 
@@ -61,7 +72,10 @@ If creating, collect (use extracted values as defaults, ask Chris to confirm or 
 - Litigation Phase: Prelitigation (default) | Litigation | Appeal
 - Outside Counsel (optional)
 
-Create with `createRecord`. Use today's date (MM/DD/YYYY) as Date Open.
+Create with `airtable_create_record` on `Cases`. Use today's date (MM/DD/YYYY) as Date Open. The
+`supervised` tier is already scoped to write `Cases` on this deployment — if the write is rejected,
+that means a table/field name has drifted, not a permissions gap; call `airtable_get_schema` to
+check before retrying.
 
 ---
 

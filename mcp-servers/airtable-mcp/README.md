@@ -70,11 +70,19 @@ table.
 
 This is the actual `AIRTABLE_MCP_CONFIG` value used by the first deployment
 of this server, proxying the Legal Tracker base (`appFIB9fJCzTeFDcG`) for
-`legal-tracker-triage`, `legal-tracker-triage-review`, and
-`nat-1-1-briefing`. Since this now lives in Script Properties rather than
-in code, this is the checked-in record of what it should be set to — update
-this block if that deployment's config ever changes, so it doesn't only
-exist as tribal knowledge in one Apps Script project's settings.
+`legal-tracker-triage`, `legal-tracker-triage-review`, `nat-1-1-briefing`,
+and the `matter-intake` skill. Since this now lives in Script Properties
+rather than in code, this is the checked-in record of what it should be set
+to — update this block if that deployment's config ever changes, so it
+doesn't only exist as tribal knowledge in one Apps Script project's
+settings.
+
+`matter-intake` is a `supervised`-tier caller — the first interactive one,
+as opposed to the three scheduled routines above. It reads/creates records
+in `Cases` during matter intake, which was already in `supervised`'s
+`writeTables`, so adding it as a caller required no config change here,
+only pointing the skill at this same deployment's URL and a `supervised`
+token.
 
 ```json
 {
@@ -124,6 +132,14 @@ this (or was successfully prompt-injected into ignoring the instruction)
 would have every other secret in the vault sitting in its own context.
 `AIRTABLE_MCP_URL` (not a secret, just the deployment URL) is still a plain
 environment variable.
+
+**How `matter-intake` gets the `supervised` token:** differently, since it
+runs on Chris's desktop rather than as a cloud routine — the one context
+where the `google-sheets` skill's PowerShell/Desktop Commander path
+actually works. It uses that skill's scoped range read to fetch only the
+row labeled `AIRTABLE_MCP_TOKEN_SUPERVISED` from the same Secrets Sheet,
+rather than the whole-file Google Drive read above, so it never sees any
+other row.
 
 ## Testing before wiring up any caller
 

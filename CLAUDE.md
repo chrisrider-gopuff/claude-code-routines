@@ -175,20 +175,26 @@ table/field before trusting a hardcoded name.
 
 The first (and currently only) deployment of this server proxies the Legal
 Tracker base (`appFIB9fJCzTeFDcG`) for `legal-tracker-triage`,
-`legal-tracker-triage-review`, and `nat-1-1-briefing` — all three go
-through it (via the `airtable-mcp` skill below) instead of holding
-`AIRTABLE_API_KEY` directly. Its config specifically: `unsupervised` can
-write `Update Matches`/`Thread Matches`, `supervised` adds `Case
+`legal-tracker-triage-review`, `nat-1-1-briefing`, and the `matter-intake`
+skill (`.claude/skills/matter-intake/SKILL.md`) — all four go through it
+(via the `airtable-mcp` skill below) instead of holding `AIRTABLE_API_KEY`
+directly. `matter-intake` is the first `supervised`-tier caller: unlike the
+other three, it runs interactively (on Chris's desktop, not as a scheduled
+routine), reading/writing the `Cases` table to find-or-create a matter
+record during intake. Its config specifically: `unsupervised` can write
+`Update Matches`/`Thread Matches`, `supervised` adds `Case
 Activity`/`Cases`, and `deleteTables` is `Update Matches` only — rationale
-in each routine's `prompt.md`. See `mcp-servers/airtable-mcp/README.md` for
-that deployment's actual `AIRTABLE_MCP_CONFIG` value (the checked-in source
-of truth, since it now lives in Script Properties rather than code), plus
-deployment and testing steps for standing up a new deployment against a
-different base.
+in each routine's `prompt.md`. `Cases` was already in `supervised`'s
+`writeTables` before `matter-intake` existed as a caller, so onboarding it
+required no config change, only pointing the skill at the existing
+deployment. See `mcp-servers/airtable-mcp/README.md` for that deployment's
+actual `AIRTABLE_MCP_CONFIG` value (the checked-in source of truth, since
+it now lives in Script Properties rather than code), plus deployment and
+testing steps for standing up a new deployment against a different base.
 
-None of the three callers hold the `unsupervised` token as a plain
-environment variable — each looks it up at the start of its run from a
-private, single-owner Secrets Sheet (Google Sheet, owned solely by Chris)
+None of the three scheduled routines hold the `unsupervised` token as a
+plain environment variable — each looks it up at the start of its run from
+a private, single-owner Secrets Sheet (Google Sheet, owned solely by Chris)
 that also holds unrelated secrets for other systems, via the Google Drive
 MCP's `read_file_content`. That's a whole-file read, not a scoped one —
 there's no Google Sheets MCP connector or range-scoped read tool available
@@ -200,7 +206,11 @@ explicit that only the one named row's value may ever be used, echoed, or
 referenced — never any other row or the sheet's contents in general — but
 this is a prompt-level discipline, not a technical restriction the read
 itself enforces. See `mcp-servers/airtable-mcp/README.md` for the sheet ID
-and the exact lookup steps.
+and the exact lookup steps. `matter-intake`, by contrast, runs in the one
+execution context where the `google-sheets` skill's range-scoped read
+actually works (Chris's desktop) — it looks up its `supervised` token via
+that scoped read instead, so it never sees the rest of the Secrets Sheet at
+all.
 
 ## Skills
 

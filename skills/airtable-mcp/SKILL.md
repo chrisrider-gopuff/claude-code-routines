@@ -114,23 +114,27 @@ server-side, and for how to stand up a new deployment for a different base.
 ## Known deployments
 
 - **Legal Tracker** (`appFIB9fJCzTeFDcG`) — used by `legal-tracker-triage`,
-  `legal-tracker-triage-review`, and `nat-1-1-briefing`. Tables: `Update
+  `legal-tracker-triage-review`, `nat-1-1-briefing` (all `unsupervised`),
+  and the `matter-intake` skill (`supervised`). Tables: `Update
   Matches`, `Case Activity`, `Thread Matches`, `Cases`, `Opposing Counsel`.
   The actual `AIRTABLE_MCP_CONFIG` for this deployment (which tier can
   write/delete where, and why) is documented in
   `mcp-servers/airtable-mcp/README.md`'s "Worked example" section — that
   file, not this one, is the source of truth for its current value.
-  **Token sourcing:** none of these three callers hold `AIRTABLE_MCP_TOKEN`
-  as a plain environment variable — they look up the `unsupervised` token
-  at the start of each run from a private, single-owner Secrets Sheet via
-  the Google Drive MCP's `read_file_content` (a whole-file read — no
-  Google Sheets MCP connector or range-scoped read tool exists in this
-  environment). The sheet also holds unrelated secrets for other systems;
-  each routine's prompt is explicit that only the row named
-  `AIRTABLE_MCP_TOKEN_UNSUPERVISED` may ever be used or referenced, though
-  that's prompt-level discipline, not something the read itself restricts.
-  See `mcp-servers/airtable-mcp/README.md` and each routine's `prompt.md`
-  for the exact steps.
+  **Token sourcing:** none of these callers hold `AIRTABLE_MCP_TOKEN`
+  as a plain environment variable. The three `unsupervised` routines look
+  up their token at the start of each run from a private, single-owner
+  Secrets Sheet via the Google Drive MCP's `read_file_content` (a
+  whole-file read — no Google Sheets MCP connector or range-scoped read
+  tool exists in a cloud routine's environment); the sheet also holds
+  unrelated secrets for other systems, and each routine's prompt is
+  explicit that only the row named `AIRTABLE_MCP_TOKEN_UNSUPERVISED` may
+  ever be used or referenced, though that's prompt-level discipline, not
+  something the read itself restricts. `matter-intake` runs interactively
+  on Chris's desktop instead, so it looks up `AIRTABLE_MCP_TOKEN_SUPERVISED`
+  via the `google-sheets` skill's scoped range read — only that one row,
+  never the whole sheet. See `mcp-servers/airtable-mcp/README.md` and each
+  caller's own instructions for the exact steps.
 
 Add an entry here whenever a new base gets its own deployment, so a caller
 can find the right one without reading every routine's prompt.md.
