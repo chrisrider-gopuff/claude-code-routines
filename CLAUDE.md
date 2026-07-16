@@ -194,12 +194,11 @@ than it looks: Apps Script only changes a deployment's URL when you create
 a brand-new deployment, not when you push an updated version to an
 existing one (Manage deployments → Edit → new version), so three
 independent copies is an acceptable trade-off rather than something worth
-building indirection for. The one thing worth doing once this deployment
-actually exists: record the real URL as a concrete value in
+building indirection for. The real URL is recorded as a concrete value in
 `mcp-servers/airtable-mcp/README.md`'s "Worked example" section, alongside
 `AIRTABLE_BASE_ID`, so each environment's copy has one documented place to
 be copied from — not "ask Chris" as the only way to find the current
-value. No deployment exists yet, so that value isn't filled in there yet.
+value.
 
 None of the three callers hold the `unsupervised` token as a plain
 environment variable — each looks it up at the start of its run from a

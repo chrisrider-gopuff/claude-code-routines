@@ -95,14 +95,17 @@ be the source of truth for the config's actual current value.
 
 `AIRTABLE_BASE_ID` for this deployment is `appFIB9fJCzTeFDcG`.
 
-`AIRTABLE_MCP_URL` for this deployment: **not yet recorded — no deployment
-exists yet.** Once deployed (step 3 above), put the resulting `.../exec`
-URL on this line. It isn't secret, so it's fine to commit here. This is
-meant to be the one documented place each of the three routines'
-environments copies its `AIRTABLE_MCP_URL` from, rather than "ask Chris"
-being the only way to find the current value — see the rationale for why
-three independent env-var copies (rather than a shared lookup) is an
-acceptable trade-off in `CLAUDE.md`'s `airtable-mcp` MCP-server section.
+`AIRTABLE_MCP_URL` for this deployment:
+`https://script.google.com/macros/s/AKfycbxfjxmrC2QqY3sv_LjMRI8EbeF5VJTFBpGzA_WNOa8b668G3wW0Uqq11XP9mjxs_xSK2A/exec`.
+It isn't secret, so it's fine to commit here. This is the one documented
+place each of the three routines' environments copies its
+`AIRTABLE_MCP_URL` from, rather than "ask Chris" being the only way to
+find the current value — see the rationale for why three independent
+env-var copies (rather than a shared lookup) is an acceptable trade-off in
+`CLAUDE.md`'s `airtable-mcp` MCP-server section. If this deployment is ever
+retired and replaced with a brand-new one (not just a new version of the
+existing one), update this line and re-copy it into all three
+environments.
 Apps Script only changes a deployment's URL when you create a brand-new
 deployment, not when you push an updated version to an existing one, so
 this value shouldn't need to change often once it's set.
