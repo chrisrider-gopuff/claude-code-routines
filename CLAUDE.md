@@ -22,6 +22,8 @@ Reads today's Google Calendar and includes a meeting if it's external (non-gopuf
 
 Items that appear in multiple sources are consolidated into a single entry with sub-bullets for each distinct next action.
 
+**Snoozing and extending items:** Replying "resurface Friday" (or "in N days", a specific date, etc.) to a numbered item holds it off the brief until that date instead of showing it every morning. Items sourced from Gmail/Slack that are about to age out of the 7-day sweep window get flagged with a ⏳ note in the brief; replying "continue for 2 weeks" (or any duration) keeps that item visible past its natural drop-off point. Because each run only reads yesterday's thread reply, both a multi-day hold and an extension have to be persisted somewhere the routine will still see days later — tracked in `routines/daily-brief/state.json`, which (unlike other routines' state files) is checked into this repo rather than created at runtime, so it survives across an ephemeral environment and stays reviewable in git history. The routine reads it each morning for items due or expiring, and commits it back after any change.
+
 **Required MCP integrations:**
 - Google Calendar (list today's events)
 - Gmail (read threads, search)
