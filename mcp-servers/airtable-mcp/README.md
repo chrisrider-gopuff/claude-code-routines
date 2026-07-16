@@ -96,7 +96,7 @@ be the source of truth for the config's actual current value.
 `AIRTABLE_BASE_ID` for this deployment is `appFIB9fJCzTeFDcG`.
 
 `AIRTABLE_MCP_URL` for this deployment:
-`https://script.google.com/macros/s/AKfycbxfjxmrC2QqY3sv_LjMRI8EbeF5VJTFBpGzA_WNOa8b668G3wW0Uqq11XP9mjxs_xSK2A/exec`.
+`https://script.google.com/macros/s/AKfycbw1brT4MmjzH8Ok1vOU96dPGfbavo8MyEZTeGk6_H0OFFQZbtQtG9ZK5qD5WFnwy7wP/exec`.
 It isn't secret, but rather than sit in each of the three routines'
 environments as an independent env var copy, it's sourced the same way as
 the `unsupervised` token below — one row in the Secrets Sheet, read at
