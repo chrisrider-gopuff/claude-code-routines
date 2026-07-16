@@ -116,8 +116,22 @@ Sweeps the past 7 days of Gmail, Slack, and Google Drive for MAJOR accomplishmen
 
 **Required environment:** `SHARED_SECRET` set on the environment this routine runs from, matching the Script Property configured in the Apps Script deployment.
 
+### weekly-briefing
+
+**Schedule:** Mondays at 9:00 AM Eastern (America/New_York) — placeholder, adjust to preference
+**Prompt:** `routines/weekly-briefing/prompt.md`
+**Config:** `routines/weekly-briefing/schedule.yaml`
+
+Steps back from the day-to-day #morning-briefing posts (produced by `daily-brief`) and Chris's replies to them, to surface a week-level view: larger themes across the week's items, new cases that came in with a synopsis and status, upcoming deadlines, and any tasks that silently fell off a daily brief without being resolved.
+
+**Note:** originally ran only as a Routine prompt typed directly into the webui, with no file in this repo — formalized here. The destination channel for its summary is still an open item; see `prompt.md`.
+
+**Required MCP integrations:**
+- Slack (search/read `#morning-briefing`, send message)
+
 ## Adding new routines
 
 1. Create a directory under `routines/<routine-name>/`
 2. Add `prompt.md` with the routine instructions
 3. Add `schedule.yaml` with the cron expression and timezone
+4. When wiring the schedule up as a live Routine (webui or `create_trigger`), give the trigger a short prompt that tells the fired session to read and follow this repo's `prompt.md` at fire time — never paste the routine's instructions directly into the trigger prompt. A trigger with embedded instructions is a snapshot: it silently drifts the moment `prompt.md` is edited, since nothing re-syncs it automatically. Note that `update_trigger` cannot change a trigger's prompt text (only cron/name/enabled/model) — changing the prompt means deleting and recreating the trigger.
