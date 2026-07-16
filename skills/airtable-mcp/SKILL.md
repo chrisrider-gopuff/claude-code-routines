@@ -122,11 +122,15 @@ server-side, and for how to stand up a new deployment for a different base.
   file, not this one, is the source of truth for its current value.
   **Token sourcing:** none of these three callers hold `AIRTABLE_MCP_TOKEN`
   as a plain environment variable — they look up the `unsupervised` token
-  at the start of each run from a private, single-owner Secrets Sheet
-  (range-scoped read: locate the row by key name in column A, read only
-  that row's value in column B — never the whole sheet, which also holds
-  unrelated secrets for other systems). See `mcp-servers/airtable-mcp/README.md`
-  and each routine's `prompt.md` for the exact steps.
+  at the start of each run from a private, single-owner Secrets Sheet via
+  the Google Drive MCP's `read_file_content` (a whole-file read — no
+  Google Sheets MCP connector or range-scoped read tool exists in this
+  environment). The sheet also holds unrelated secrets for other systems;
+  each routine's prompt is explicit that only the row named
+  `AIRTABLE_MCP_TOKEN_UNSUPERVISED` may ever be used or referenced, though
+  that's prompt-level discipline, not something the read itself restricts.
+  See `mcp-servers/airtable-mcp/README.md` and each routine's `prompt.md`
+  for the exact steps.
 
 Add an entry here whenever a new base gets its own deployment, so a caller
 can find the right one without reading every routine's prompt.md.

@@ -54,7 +54,7 @@ A Thread Matches table caches thread→case matches so repeat runs skip re-match
 **Required MCP integrations:**
 - Gmail (read threads, search)
 - Slack (search public and private channels; send messages)
-- Google Sheets (range-scoped read only, via the google-sheets skill — to fetch the `unsupervised` token from the Secrets Sheet; never a whole-sheet read)
+- Google Drive (`read_file_content` on the Secrets Sheet — a whole-file read, since no scoped-read tool exists for Sheets in this environment; see "Airtable access" above)
 
 **Required environment:** `AIRTABLE_MCP_URL` (the deployment URL — not secret) set on the environment this routine runs from. The `unsupervised` tier token is NOT an environment variable — it's looked up at the start of each run from the private Secrets Sheet (see "Airtable access" above and `mcp-servers/airtable-mcp/README.md`).
 
@@ -78,7 +78,7 @@ Only once a pattern's cumulative count reaches 5 — in either direction — and
 - Slack (send message for summary)
 - GitHub (branch, commit, open PR)
 - Gmail/Slack read access, only if an Entry's summary text isn't enough to classify why it was rejected
-- Google Sheets (range-scoped read only, via the google-sheets skill — to fetch the `unsupervised` token from the Secrets Sheet; never a whole-sheet read)
+- Google Drive (`read_file_content` on the Secrets Sheet — a whole-file read, since no scoped-read tool exists for Sheets in this environment)
 
 **Required environment:** `AIRTABLE_MCP_URL` (not secret). Same as `legal-tracker-triage`, the `unsupervised` tier token is looked up from the Secrets Sheet at runtime, not held as an environment variable.
 
@@ -98,8 +98,7 @@ State between phases is tracked in `routines/nat-1-1-briefing/state.json`, since
 **Required MCP integrations:**
 - Google Calendar (check for today's Chris/Nat 1:1)
 - Slack (read/search channels, send messages)
-- Google Drive (one-time seed doc read on first-ever run)
-- Google Sheets (range-scoped read only, via the google-sheets skill — to fetch the `unsupervised` token from the Secrets Sheet; never a whole-sheet read)
+- Google Drive (one-time seed doc read on first-ever run; also `read_file_content` on the Secrets Sheet each Phase 1 run — a whole-file read, since no scoped-read tool exists for Sheets in this environment)
 
 **Airtable access:** Phase 1 reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the `airtable-mcp` skill/server, read-only — never holds `AIRTABLE_API_KEY` directly. Uses the `unsupervised` tier token: Phase 1 runs on a schedule with no human present and never needs to write to Airtable at all, so the more restrictive token costs nothing functionally. Phases 2–3 don't touch Airtable.
 
@@ -175,12 +174,18 @@ different base.
 None of the three callers hold the `unsupervised` token as a plain
 environment variable — each looks it up at the start of its run from a
 private, single-owner Secrets Sheet (Google Sheet, owned solely by Chris)
-that also holds unrelated secrets for other systems. Each routine reads
-only column A to locate its token's row by name, then only that row's
-value in column B — never the whole sheet — so a routine exposed to
-untrusted swept content can't see the other secrets sharing that vault.
-See `mcp-servers/airtable-mcp/README.md` for the sheet ID and the exact
-lookup steps.
+that also holds unrelated secrets for other systems, via the Google Drive
+MCP's `read_file_content`. That's a whole-file read, not a scoped one —
+there's no Google Sheets MCP connector or range-scoped read tool available
+in this environment (confirmed: only Google Drive is connected, and its
+tools read/download entire files; the `google-sheets` skill that does
+support ranges only works from Chris's local desktop via Desktop
+Commander/PowerShell, unreachable from a cloud routine). Each prompt is
+explicit that only the one named row's value may ever be used, echoed, or
+referenced — never any other row or the sheet's contents in general — but
+this is a prompt-level discipline, not a technical restriction the read
+itself enforces. See `mcp-servers/airtable-mcp/README.md` for the sheet ID
+and the exact lookup steps.
 
 ## Skills
 

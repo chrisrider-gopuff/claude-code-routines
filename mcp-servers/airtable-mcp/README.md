@@ -102,13 +102,28 @@ single-owner ("Secrets Sheet") Google Sheet (spreadsheet ID
 `1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned solely by
 `chris.rider@gopuff.com`, no other collaborators) that also holds several
 unrelated secrets for other systems (the Airtable API key itself,
-BrightFlag credentials, a routines API token). Each routine reads only
-column A to locate the row labeled `AIRTABLE_MCP_TOKEN_UNSUPERVISED`, then
-reads only that row's column B cell for the value — never the whole sheet
-— so a routine exposed to untrusted swept content never gains visibility
-into the other secrets living in the same vault. See each routine's
-`prompt.md` for the exact lookup steps. `AIRTABLE_MCP_URL` (not a secret,
-just the deployment URL) is still a plain environment variable.
+BrightFlag credentials, a routines API token), using the Google Drive MCP's
+`read_file_content` on that file ID.
+
+This is a **whole-file read, not a scoped one** — there's no Google Sheets
+MCP connector or range-scoped read tool available in this environment.
+Confirmed by checking both `ListConnectors` (nothing named Sheets) and
+`SearchMcpRegistry` (only Google Drive is connected; its tools —
+`read_file_content`, `download_file_content`, etc. — read or download
+entire files, no range parameter). A `google-sheets` *skill* does support
+single-cell/range reads, but it's not an MCP connector: it shells out to
+PowerShell via Desktop Commander on Chris's local desktop and reads its own
+auth passphrase from a local file path, so it's unreachable from a cloud
+routine. Given that, each routine's `prompt.md` is explicit that even
+though the read returns everything in the sheet, only the single row
+labeled `AIRTABLE_MCP_TOKEN_UNSUPERVISED` may ever be used, echoed, or
+referenced — never any other row or the sheet's contents in general. That's
+enforced by prompt discipline, not by the read itself, which is a real
+trade-off worth knowing rather than glossing over: a routine that mishandled
+this (or was successfully prompt-injected into ignoring the instruction)
+would have every other secret in the vault sitting in its own context.
+`AIRTABLE_MCP_URL` (not a secret, just the deployment URL) is still a plain
+environment variable.
 
 ## Testing before wiring up any caller
 
