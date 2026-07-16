@@ -95,15 +95,29 @@ be the source of truth for the config's actual current value.
 
 `AIRTABLE_BASE_ID` for this deployment is `appFIB9fJCzTeFDcG`.
 
+`AIRTABLE_MCP_URL` for this deployment:
+`https://script.google.com/macros/s/AKfycbxfjxmrC2QqY3sv_LjMRI8EbeF5VJTFBpGzA_WNOa8b668G3wW0Uqq11XP9mjxs_xSK2A/exec`.
+It isn't secret, but rather than sit in each of the three routines'
+environments as an independent env var copy, it's sourced the same way as
+the `unsupervised` token below — one row in the Secrets Sheet, read at
+runtime. This line is the checked-in record of what that row's value
+should be (so a diff shows if it ever drifts); the routines themselves
+never read it from here or from an environment variable. If this
+deployment is ever retired and replaced with a brand-new one (not just a
+new version of the existing one — Apps Script keeps the same URL across
+version pushes), update this line and the Secrets Sheet row together.
+
 **How `legal-tracker-triage`, `legal-tracker-triage-review`, and
-`nat-1-1-briefing` get the `unsupervised` token:** not a plain environment
-variable — they look it up at the start of each run from a private,
-single-owner ("Secrets Sheet") Google Sheet (spreadsheet ID
-`1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned solely by
-`chris.rider@gopuff.com`, no other collaborators) that also holds several
-unrelated secrets for other systems (the Airtable API key itself,
-BrightFlag credentials, a routines API token), using the Google Drive MCP's
-`read_file_content` on that file ID.
+`nat-1-1-briefing` get `AIRTABLE_MCP_URL` and the `unsupervised` token:**
+neither is a plain environment variable — they look up both at the start
+of each run from a private, single-owner ("Secrets Sheet") Google Sheet
+(spreadsheet ID `1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned
+solely by `chris.rider@gopuff.com`, no other collaborators) that also
+holds several unrelated secrets for other systems (the Airtable API key
+itself, BrightFlag credentials, a routines API token), using the Google
+Drive MCP's `read_file_content` on that file ID. The sheet needs two rows
+for this deployment: `AIRTABLE_MCP_URL` (value above) and
+`AIRTABLE_MCP_TOKEN_UNSUPERVISED`.
 
 This is a **whole-file read, not a scoped one** — there's no Google Sheets
 MCP connector or range-scoped read tool available in this environment.
@@ -115,15 +129,14 @@ single-cell/range reads, but it's not an MCP connector: it shells out to
 PowerShell via Desktop Commander on Chris's local desktop and reads its own
 auth passphrase from a local file path, so it's unreachable from a cloud
 routine. Given that, each routine's `prompt.md` is explicit that even
-though the read returns everything in the sheet, only the single row
-labeled `AIRTABLE_MCP_TOKEN_UNSUPERVISED` may ever be used, echoed, or
-referenced — never any other row or the sheet's contents in general. That's
-enforced by prompt discipline, not by the read itself, which is a real
-trade-off worth knowing rather than glossing over: a routine that mishandled
-this (or was successfully prompt-injected into ignoring the instruction)
-would have every other secret in the vault sitting in its own context.
-`AIRTABLE_MCP_URL` (not a secret, just the deployment URL) is still a plain
-environment variable.
+though the read returns everything in the sheet, only the two rows labeled
+`AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN_UNSUPERVISED` may ever be used,
+echoed, or referenced — never any other row or the sheet's contents in
+general. That's enforced by prompt discipline, not by the read itself,
+which is a real trade-off worth knowing rather than glossing over: a
+routine that mishandled this (or was successfully prompt-injected into
+ignoring the instruction) would have every other secret in the vault
+sitting in its own context.
 
 ## Testing before wiring up any caller
 

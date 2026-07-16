@@ -58,7 +58,7 @@ A Thread Matches table caches thread→case matches so repeat runs skip re-match
 - Slack (search public and private channels; send messages)
 - Google Drive (`read_file_content` on the Secrets Sheet — a whole-file read, since no scoped-read tool exists for Sheets in this environment; see "Airtable access" above)
 
-**Required environment:** `AIRTABLE_MCP_URL` (the deployment URL — not secret) set on the environment this routine runs from. The `unsupervised` tier token is NOT an environment variable — it's looked up at the start of each run from the private Secrets Sheet (see "Airtable access" above and `mcp-servers/airtable-mcp/README.md`).
+**Required environment:** none. Both `AIRTABLE_MCP_URL` and the `unsupervised` tier token are looked up at the start of each run from the private Secrets Sheet, not held as environment variables (see "Airtable access" above and `mcp-servers/airtable-mcp/README.md`).
 
 ### legal-tracker-triage-review
 
@@ -82,7 +82,7 @@ Only once a pattern's cumulative count reaches 5 — in either direction — and
 - Gmail/Slack read access, only if an Entry's summary text isn't enough to classify why it was rejected
 - Google Drive (`read_file_content` on the Secrets Sheet — a whole-file read, since no scoped-read tool exists for Sheets in this environment)
 
-**Required environment:** `AIRTABLE_MCP_URL` (not secret). Same as `legal-tracker-triage`, the `unsupervised` tier token is looked up from the Secrets Sheet at runtime, not held as an environment variable.
+**Required environment:** none. Same as `legal-tracker-triage`, both `AIRTABLE_MCP_URL` and the `unsupervised` tier token are looked up from the Secrets Sheet at runtime, not held as environment variables.
 
 ### nat-1-1-briefing
 
@@ -104,7 +104,7 @@ A previous three-phase version of this routine (schedule-triggered draft, then S
 
 **Airtable access:** Reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the `airtable-mcp` skill/server, read-only — never holds `AIRTABLE_API_KEY` directly. Uses the `unsupervised` tier token even though this routine never needs to write to Airtable at all, so the more restrictive token costs nothing functionally.
 
-**Required environment:** `AIRTABLE_MCP_URL` (not secret). Same as `legal-tracker-triage`, the `unsupervised` tier token is looked up from the Secrets Sheet at runtime, not held as an environment variable.
+**Required environment:** none. Same as `legal-tracker-triage`, both `AIRTABLE_MCP_URL` and the `unsupervised` tier token are looked up from the Secrets Sheet at runtime, not held as environment variables.
 
 **Note:** The routine's live scheduled trigger should be configured to spawn a fresh session on each fire (not resume a persistent session), since each weekday's draft/edit/publish cycle is self-contained.
 
@@ -186,17 +186,27 @@ of truth, since it now lives in Script Properties rather than code), plus
 deployment and testing steps for standing up a new deployment against a
 different base.
 
-None of the three callers hold the `unsupervised` token as a plain
-environment variable — each looks it up at the start of its run from a
-private, single-owner Secrets Sheet (Google Sheet, owned solely by Chris)
-that also holds unrelated secrets for other systems, via the Google Drive
-MCP's `read_file_content`. That's a whole-file read, not a scoped one —
-there's no Google Sheets MCP connector or range-scoped read tool available
-in this environment (confirmed: only Google Drive is connected, and its
-tools read/download entire files; the `google-sheets` skill that does
-support ranges only works from Chris's local desktop via Desktop
+None of the three callers hold `AIRTABLE_MCP_URL` or the `unsupervised`
+token as plain environment variables — each looks up both, at the start of
+its run, from a private, single-owner Secrets Sheet (Google Sheet, owned
+solely by Chris) that also holds unrelated secrets for other systems, via
+the Google Drive MCP's `read_file_content`. `AIRTABLE_MCP_URL` isn't
+sensitive the way the token is — it moved into the sheet for operational
+reasons, not secrecy: every caller already pays for a whole-file read to
+get the token, so having it also read one more row costs nothing extra,
+and it replaces three independent per-environment copies with a single
+value that's edited in one place. See `mcp-servers/airtable-mcp/README.md`
+for the current value of that row (the checked-in record of what it should
+be, since the sheet itself isn't).
+
+That read is a whole-file read, not a scoped one — there's no Google
+Sheets MCP connector or range-scoped read tool available in this
+environment (confirmed: only Google Drive is connected, and its tools
+read/download entire files; the `google-sheets` skill that does support
+ranges only works from Chris's local desktop via Desktop
 Commander/PowerShell, unreachable from a cloud routine). Each prompt is
-explicit that only the one named row's value may ever be used, echoed, or
+explicit that only the two named rows' values (`AIRTABLE_MCP_URL` and
+`AIRTABLE_MCP_TOKEN_UNSUPERVISED`) may ever be used, echoed, or
 referenced — never any other row or the sheet's contents in general — but
 this is a prompt-level discipline, not a technical restriction the read
 itself enforces. See `mcp-servers/airtable-mcp/README.md` for the sheet ID
