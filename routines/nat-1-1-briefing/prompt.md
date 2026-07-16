@@ -1,104 +1,51 @@
 ---
 name: nat-1-1-briefing
-description: Prepares Chris Rider's briefing ahead of his 1:1 with Nat Flandreau. Runs in three phases: (1) build and post a draft, (2) process Chris's line-edit reply into a final version, (3) post the approved final version into #chris-nat-1to1 as the permanent record. Phase 1 is schedule-triggered; Phases 2 and 3 are triggered externally (Slack emoji reaction -> Workflow Builder -> Google Sheet -> Apps Script -> API fire) rather than on a timer.
+description: Prepares Chris Rider's briefing ahead of his recurring 1:1 with Nat Flandreau, entirely within this chat session -- builds and presents a draft, incorporates Chris's conversational edits, then posts the final version to #chris-nat-1to1 once Chris says to publish.
 ---
 
 # Nat 1:1 Briefing Routine
 
-## Entry point -- determine which phase to run
+## How this routine runs
 
-This routine has two triggers: a daily schedule (no `text` field passed -- always
-Phase 1) and an API trigger fired by a Google Apps Script watching a Google Sheet
-that a Slack Workflow Builder emoji-reaction workflow writes to (mechanics below).
+Fresh session every weekday morning, no memory of prior runs. Everything --
+draft, edits, and publish -- happens within this one session's conversation.
+There is no external trigger and no cross-session state file.
 
-**On every invocation, first check the `text` field passed with this run:**
-- No `text`, or `text` doesn't match either pattern below -> this was the
-  **schedule** trigger. Run **Phase 1** only.
-- `text` starts with `PHASE2` -> run **Phase 2** only. The rest of `text` contains
-  `channel_id=<id> ts=<timestamp>` identifying the draft message Chris reacted to
-  with :100:. Use these values instead of reading `state.json` when present.
-- `text` starts with `PHASE3` -> run **Phase 3** only, using the same
-  `channel_id=<id> ts=<timestamp>` pattern, identifying the final-version message
-  Chris reacted to with :white_check_mark:.
-
-Never run more than one phase in a single invocation -- read only that phase's own
-section below; do not execute steps from the other two phases.
-
-**How the API trigger fires (context only -- this happens outside Claude):** Chris
-reacts to the draft or final-version Slack message in the review channel with an
-emoji. A Slack Workflow Builder workflow watching for reactions there appends a row
-to [this Google Sheet](https://docs.google.com/spreadsheets/d/1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ/edit)
-(columns: `Channel`, `Timestamp`, `Emoji`). A Google Apps Script `onEdit` trigger on
-that sheet reads the new row and POSTs to this routine's `/fire` endpoint:
-- Emoji `:100:` -> `text: "PHASE2 channel_id=<Channel> ts=<Timestamp>"`
-- Emoji `:white_check_mark:` -> `text: "PHASE3 channel_id=<Channel> ts=<Timestamp>"`
-
-## Why this is three phases, not one
-
-The old version of this routine ran once a day on a cron schedule and did everything
-in a single pass. That breaks down once a human has to read a draft, write a reply,
-and approve a final version -- a script on a timer can't know when Chris has actually
-replied or approved. So this routine is split into three independently-triggerable
-phases that share the same underlying logic (sourcing, classification, formatting)
-but each only do their one job when fired.
-
-| Phase | Trigger | Does |
-|---|---|---|
-| 1. Draft | Schedule (weekday morning) | Build the briefing from scratch, post it as a draft |
-| 2. Finalize | External fire (:100: reaction -> Sheet -> Apps Script -> API) | Read Chris's thread reply, apply his edits, post a final version for approval |
-| 3. Publish | External fire (:white_check_mark: reaction -> Sheet -> Apps Script -> API) | Post the approved final version into #chris-nat-1to1 as the permanent record |
-
-See Entry point above for exactly how a fired run determines which phase to execute.
-
-**Trigger payload needed for Phase 2 and Phase 3:** at minimum, the channel ID and
-the message `ts` (timestamp) of the draft (Phase 2) or final version (Phase 3)
-message that should be acted on -- provided via the `text` field per Entry point
-above. If for some reason `text` lacks a parseable `channel_id`/`ts`, fall back to
-"act on the most recent message this routine itself posted in the review channel" --
-see State Tracking below.
-
-## State tracking between phases
-
-Because each phase can run in a fresh session with no memory of prior phases,
-persist a small state file after each phase so the next phase knows what to act on:
-
-- Path: same directory as this routine file, `state.json`
-- After Phase 1: write `{"phase": "draft_posted", "channel_id": "...", "draft_ts": "...", "date": "YYYY-MM-DD"}`
-- After Phase 2: update to `{"phase": "final_posted", "channel_id": "...", "draft_ts": "...", "final_ts": "...", "date": "YYYY-MM-DD"}`
-- After Phase 3: update to `{"phase": "published", "channel_id": "...", "final_ts": "...", "published_ts": "...", "date": "YYYY-MM-DD"}`
-
-Each phase should read `state.json` first, confirm it's in the expected prior phase
-for today's date before proceeding (e.g. Phase 2 expects `phase: draft_posted` from
-today), and stop with a clear message if the state doesn't match (e.g. fired twice,
-or fired before the prior phase ran).
+1. **Build and present the draft** (Step 1) -- runs immediately on fire. Gather
+   source material, dedupe, classify, and present the numbered draft directly
+   as a chat message in this session. Nothing is posted to Slack yet.
+2. **Incorporate edits** (Step 2) -- Chris replies in this same conversation,
+   mixing numbered commands (`drop`, `revise`, `NS: <note>`) with free text for
+   new items. Keep updating the working draft in place across as many rounds as
+   Chris wants.
+3. **Publish on request** (Step 3) -- only when Chris explicitly says to
+   post/publish/send it, post the current draft to `#chris-nat-1to1` as the
+   permanent record.
 
 ## Config
 
-- Review channel (where the draft/final version get posted for Chris to edit/approve): `#test1to1`, channel ID `C0BGUDTV3M1` (currently a test channel -- swap to Chris's DM or another channel once this is validated).
-- Permanent record channel (where the approved final gets published): `#chris-nat-1to1`, channel ID `C0BG3EE38FK`.
+- Permanent record channel (where the finished briefing gets posted, and the
+  sole source of Old Business for future runs): `#chris-nat-1to1`, channel ID
+  `C0BG3EE38FK`.
 - Chris Rider: `chris.rider@gopuff.com`, Slack user ID `U0AHNL8LD53`.
 - Nat Flandreau: `nat.flandreau@gopuff.com`.
-- Seed doc (one-time-only, first run ever): Google Doc `1YsxxdHjeB8iIAMZhvIdxqUPSBqKplgWozb00CtUlNJg`. Marker file `seed-doc-used.txt` in this routine's directory -- if it doesn't exist, this is the first real run of Phase 1; read the seed doc and merge its matters/topics into Old Business, then write the marker file after Phase 1 completes. If it exists, skip the doc -- Old Business comes only from #chris-nat-1to1 channel history.
-- Legal Tracker (Airtable): base `appFIB9fJCzTeFDcG`, table `tblmPLdw7pLLnAyFs` ("Cases"). Use the airtable-manager skill/pattern for all reads.
+- Legal Tracker (Airtable): base `appFIB9fJCzTeFDcG`, table "Cases". Use the `airtable-mcp` skill for all reads (`airtable_query`) — this routine never holds `AIRTABLE_API_KEY` directly, and runs with the `unsupervised` tier token even though it only ever reads, never writes, since there's no reason to hold a token capable of more than that. `$AIRTABLE_MCP_URL` (the deployment URL, not secret) is a plain environment variable, but the token itself is NOT — at the start of this run, use the Google Drive MCP's `read_file_content` on the private Secrets Sheet (Google Sheet ID `1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned solely by Chris), find the row whose first column reads exactly `AIRTABLE_MCP_TOKEN_UNSUPERVISED`, and take its second column as the token value. That read returns the sheet's full contents, including unrelated secrets for other systems (the Airtable API key itself, among others) — the only thing this routine may ever use, act on, or reference from it is that one value. Never echo, log, print, quote, or write any other row or the sheet's contents in general anywhere.
 - #morning-briefing: channel ID `C0B8P0BC0UX`.
 - #weekly-briefing: channel ID `C0BFUJ8LYJV`.
-- Phase trigger sheet: Google Sheet `1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ` (columns Channel, Timestamp, Emoji), fed by a Slack Workflow Builder emoji-reaction workflow on the review channel and read by a Google Apps Script `onEdit` trigger that calls this routine's API endpoint.
 
 ---
 
-## Phase 1 -- Build and post the draft
-
-Fresh session, no memory of prior runs.
+## Step 1 -- Build and present the draft
 
 **Gate:** Call Google Calendar `list_events` for chris.rider@gopuff.com, start/end of
 today (America/New_York). Look for "Chris / Nat 1:1" (recurring, organized by
 nat.flandreau@gopuff.com, usually Mondays ~11am ET but can move). If no such event
-today, STOP -- no Slack activity, no state file write.
+today, STOP -- say so plainly in chat and do nothing else.
 
 **Determine Old Business:** Read up to the last 90 days of #chris-nat-1to1
-(`C0BG3EE38FK`). Build a list of matter names/case names/topics/keywords that have
-already appeared there -- anything on this list is Old Business. Handle the one-time
-seed-doc step per Config above.
+(`C0BG3EE38FK`). Build a list of matter names/case names/topics/keywords that
+have already appeared there -- anything on this list is Old Business. This
+channel history is the only source for Old Business; there is no seed document.
 
 **Gather source material** (keep a link for every fact used):
 1. Airtable Legal Tracker -- pull all open/Active matters (litigation, employment,
@@ -176,7 +123,8 @@ match by date/fact pattern and use the Airtable record as the authoritative vers
 from #chris-nat-1to1 history), start straight with `New` items, no heading needed.
 
 **Format** (mirrors the #morning-briefing style -- flat numbered list, no table, no
-Canvas):
+Canvas -- since this is exactly what gets posted to Slack in Step 3, write it in
+Slack mrkdwn even though it's being presented in chat first):
 
 ```
 *Prep for your 1:1 with Nat -- [date] (draft)*
@@ -189,12 +137,7 @@ Canvas):
 
 ...
 
-_Reply in this thread with a numbered list to edit this draft. Each number = the item above._
-_. "drop" or "delete" -- removes that item entirely._
-_. "revise" -- updates the item with whatever additional/updated info you give me._
-_. `NS: <text>` -- appends your text in *bold* to the end of that entry (your note to Nat, or what you're doing next)._
-_. No note on a number -- carries that item forward as-is._
-_Once you reply, react to this message with :100: to have me post a final version back here for your approval before it goes to #chris-nat-1to1._
+_Reply here to edit -- by number ("3. drop", "5. revise: ...", "7. NS: <note>") and/or free text for anything new. Tell me to post it when you're ready, and I'll send this to #chris-nat-1to1._
 ```
 
 `SourceLabel` is the platform name matching the URL's domain: `Airtable`, `Gmail`,
@@ -205,69 +148,51 @@ Keep descriptions factual, no filler, and don't editorialize a strategy
 recommendation unless the Legal Tracker or a source explicitly states that's the
 plan -- Chris supplies the strategy call himself.
 
-**Post it:** `slack_send_message` to the review channel (Config above) with the
-formatted content. Write `state.json` as described in State Tracking. If Airtable or
-a briefing channel is unreachable, add a flagged row noting the gap rather than
-failing silently or skipping the run.
+**Present it:** Output the formatted content as your chat response in this
+session -- do not call `slack_send_message` yet. If Airtable or a briefing
+channel is unreachable, note the gap plainly in the chat rather than failing
+silently or skipping the run.
 
 ---
 
-## Phase 2 -- Process Chris's reply, post a final version
+## Step 2 -- Incorporate edits
 
-Fired externally (`text` starting with `PHASE2`) once Chris has replied in the
-thread under the draft and reacted to a message with :100:.
+Chris will reply in this conversation, potentially across several turns, mixing:
+- Numbered commands against a specific item: `drop`/`delete`, `revise` (with new
+  info), `NS: <text>` (append in **bold** as his note to Nat) -- same semantics
+  as the old Slack-thread-reply convention, just typed directly in chat.
+- Free text describing a new item to add, or a general instruction ("add a note
+  about X", "merge items 4 and 6").
+- No note against a number -- carry that item forward as-is.
+- Any number Chris didn't address at all -- carry forward as drafted (same as
+  "no note").
 
-1. Read `state.json`. Confirm `phase: draft_posted` for today's date; if not, stop
-   and report the mismatch instead of guessing.
-2. Read the thread under the draft message (`channel_id` + `draft_ts` parsed from
-   the `text` field per Entry point above, falling back to `state.json` if `text`
-   didn't carry them).
-3. Parse Chris's numbered reply. For each numbered item in his reply:
-   - `drop` / `delete` -> remove that item from the final version entirely.
-   - `revise` (with additional/updated info) -> update that item's description to
-     incorporate what Chris provided, keeping the same Business/Type tags unless
-     his note implies they should change (e.g. he reveals it's actually resolved,
-     or that Nat already knows about it from a prior week).
-   - `NS: <text>` -> append `<text>` in **bold** to the end of that item's line
-     (this is Chris's note to Nat, or his commentary on next steps).
-   - No note against a number -> carry that item forward exactly as drafted.
-   - Any number Chris didn't address at all -> carry forward as drafted (same as
-     "no note").
-4. Rebuild the full formatted list (same format as Phase 1) reflecting the edits.
-5. Post it as a new message in the review channel (same channel as the draft) with
-   a header like `*Prep for your 1:1 with Nat -- [date] (final -- react with :white_check_mark: to post to #chris-nat-1to1)*`
-   followed by the revised numbered list. No reply-instruction footer this time --
-   replace it with a one-line approval prompt referencing the :white_check_mark: reaction.
-6. Update `state.json` to `phase: final_posted`, adding `final_ts`.
+After each round of edits, update the working draft in place and briefly confirm
+what changed. Re-show the full numbered list if it's been more than a couple of
+small edits, so Chris can review the current state before publishing. Keep the
+same Business/Type tags on an edited item unless Chris's note implies they
+should change (e.g. he reveals it's actually resolved, or that Nat already
+knows about it from a prior week).
+
+There's no fixed number of edit rounds -- keep incorporating changes until Chris
+says to publish.
 
 ---
 
-## Phase 3 -- Publish the approved final version
+## Step 3 -- Publish on request
 
-Fired externally (`text` starting with `PHASE3`) once Chris has reacted to the
-final-version message with :white_check_mark:.
+Only when Chris explicitly asks to post/publish/send the briefing (phrases like
+"post it", "send this to Nat", "publish", "send to #chris-nat-1to1" -- use
+judgment, don't require an exact phrase):
 
-1. Read `state.json`. Confirm `phase: final_posted` for today's date; if not, stop
-   and report the mismatch.
-2. Fetch the exact content of the final-version message (`channel_id` + `final_ts`
-   parsed from `text` per Entry point above, falling back to `state.json`).
-3. Strip the approval-prompt header line, keep the numbered list content as-is --
-   this is the permanent record.
-4. `slack_send_message` to `#chris-nat-1to1` (`C0BG3EE38FK`) with that content. This
-   is a real, timestamped channel message (not a Canvas), so it becomes the
-   permanent, un-editable week-to-week record -- and it's exactly what Phase 1's Old
-   Business detection reads on future runs.
-5. Update `state.json` to `phase: published`, adding `published_ts`.
+1. Assemble the current state of the numbered list, reflecting all edits so far.
+2. Strip the edit-instructions footer -- it's not part of the permanent record.
+3. `slack_send_message` to `#chris-nat-1to1` (`C0BG3EE38FK`) with that content.
+   This is a real, timestamped channel message (not a Canvas), so it becomes the
+   permanent, un-editable week-to-week record -- and it's exactly what Step 1's
+   Old Business detection reads on future runs.
+4. Confirm in chat that it posted, with a link to the message.
 
----
-
-## Open items to resolve before going live
-
-- Decide the real review channel for production (currently `#test1to1` for testing;
-  original design was a DM to Chris -- pick one before removing the test channel).
-- Confirm the API trigger + bearer token have actually been added to this routine at
-  claude.ai/code/routines (token generation is UI-only, shown once) -- without it,
-  the Apps Script side has nothing to call.
-- Confirm the Slack Workflow Builder workflow that watches the review channel for
-  :100: and :white_check_mark: reactions and appends rows to the Phase trigger sheet
-  (Config above) is actually built and enabled.
+If Chris asks to keep editing after this point, treat it as a new addendum --
+don't silently re-post or duplicate; ask whether he wants a follow-up message or
+to hold it for next time's business.
