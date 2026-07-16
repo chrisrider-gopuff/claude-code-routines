@@ -1,41 +1,53 @@
 // Airtable MCP Server — Apps Script Web App
 //
-// Exposes the Legal Tracker Airtable base (appFIB9fJCzTeFDcG) as a remote
-// MCP server, so a Cowork plugin built from this repo can query/write Legal
-// Tracker data without any installer ever holding AIRTABLE_API_KEY. This
-// script is the only thing that holds that key; installers only ever talk
-// to this Web App.
+// The single point of contact for the Legal Tracker Airtable base
+// (appFIB9fJCzTeFDcG) for every routine, skill, and Cowork plugin install
+// that needs it. Callers never hold AIRTABLE_API_KEY themselves — this
+// script is the only thing that does, and every read/write goes through it.
 //
 // Auth: Apps Script Web Apps cannot read custom request headers (there is
 // no e.headers in doGet/doPost), so a standard `Authorization: Bearer`
 // header never reaches this script. The front-door token is instead passed
-// as a `token` query-string parameter on the deployment URL itself — bake
-// it into the URL configured in the plugin's .mcp.json, e.g.
+// as a `token` query-string parameter on the deployment URL itself, e.g.
 //   https://script.google.com/macros/s/DEPLOYMENT_ID/exec?token=XXXX
-// This token is intentionally separate from AIRTABLE_API_KEY: if it leaks,
-// the exposure is limited to what the tools below allow, and it can be
-// rotated here without touching the Airtable key at all.
+//
+// Two permission tiers, each with its own token — see TIERS below:
+//   - "unattended": Update Matches only. For anything that runs on a
+//     schedule with no human present, above all legal-tracker-triage, which
+//     sweeps unread Gmail/Slack content every morning. That content is
+//     untrusted input (prompt injection risk) — this tier exists so that
+//     even if a malicious message talked the routine into attempting a
+//     Case Activity or Cases write, the server rejects it outright rather
+//     than relying on the routine's prompt to simply not ask. This is what
+//     preserves the existing legal-tracker-triage design: matches only ever
+//     land in Update Matches, and only the Airtable Automation triggered by
+//     Chris setting Approved=Approved copies a row into Case Activity.
+//   - "supervised": Update Matches, Case Activity, and Cases. For skills or
+//     interactive routines where a person is directing each write in real
+//     time (e.g. matter-intake, check-request, or a Cowork plugin session).
 //
 // Setup:
 //   1. In this Apps Script project's Project Settings -> Script Properties, set:
-//        AIRTABLE_MCP_TOKEN  — front-door token, shared with plugin installers
-//        AIRTABLE_API_KEY    — Airtable personal access token (never shared)
+//        AIRTABLE_MCP_TOKEN_SUPERVISED  — token for supervised callers
+//        AIRTABLE_MCP_TOKEN_UNATTENDED  — token for legal-tracker-triage
+//        AIRTABLE_API_KEY               — Airtable personal access token (never shared)
+//      Generate each token independently (e.g. `openssl rand -hex 32`) —
+//      they must not be the same value.
 //   2. Deploy -> New deployment -> Web app. Execute as: Me. Who has access: Anyone.
-//   3. Put "<deployment URL>?token=<AIRTABLE_MCP_TOKEN value>" into the
-//      plugin's .mcp.json as the remote MCP server URL.
-//   4. Test with a raw POST before wiring up the plugin — see README.md in
-//      this directory for a curl example.
-//
-// Extend ALLOWED_READ_TABLES / ALLOWED_WRITE_TABLES below to match the
-// actual Legal Tracker schema as more tools are added. Writes are
-// deliberately restricted to "Update Matches" — Case Activity is only ever
-// written by the Airtable Automation that promotes an approved row (see
-// legal-tracker-triage's prompt.md), never by this proxy or any routine.
+//   3. Give each caller "<deployment URL>?token=<its tier's token>" as its
+//      remote MCP server URL / Airtable access URL.
+//   4. Test with a raw POST before wiring up any caller — see README.md in
+//      this directory for curl examples, including confirming the
+//      unattended token is actually refused for a Case Activity write.
 
 const AIRTABLE_BASE_ID = "appFIB9fJCzTeFDcG"; // Legal Tracker
 
-const ALLOWED_READ_TABLES = ["Update Matches", "Case Activity", "Thread Matches"];
-const ALLOWED_WRITE_TABLES = ["Update Matches"];
+const READ_TABLES = ["Update Matches", "Case Activity", "Thread Matches", "Cases"];
+
+const TIERS = {
+  unattended: { writeTables: ["Update Matches"] },
+  supervised: { writeTables: ["Update Matches", "Case Activity", "Cases"] }
+};
 
 const TOOL_DEFINITIONS = [
   {
@@ -53,7 +65,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "airtable_create_record",
-    description: "Create a record in the Legal Tracker Airtable base. Restricted to tables in ALLOWED_WRITE_TABLES.",
+    description: "Create a record in the Legal Tracker Airtable base. Which tables are writable depends on the caller's token tier — see TIERS in AirtableMcpServer.gs.",
     inputSchema: {
       type: "object",
       properties: {
@@ -75,9 +87,8 @@ function doPost(e) {
 
   const id = request.id !== undefined ? request.id : null;
 
-  const expectedToken = PropertiesService.getScriptProperties().getProperty("AIRTABLE_MCP_TOKEN");
-  const providedToken = e.parameter.token;
-  if (!expectedToken || providedToken !== expectedToken) {
+  const tier = resolveTier(e.parameter.token);
+  if (!tier) {
     return jsonRpcError(id, -32001, "Unauthorized");
   }
 
@@ -92,7 +103,7 @@ function doPost(e) {
       case "tools/list":
         return jsonRpcResult(id, { tools: TOOL_DEFINITIONS });
       case "tools/call":
-        return jsonRpcResult(id, callTool(request.params.name, request.params.arguments || {}));
+        return jsonRpcResult(id, callTool(tier, request.params.name, request.params.arguments || {}));
       default:
         return jsonRpcError(id, -32601, "Method not found: " + request.method);
     }
@@ -101,15 +112,23 @@ function doPost(e) {
   }
 }
 
-function callTool(name, args) {
+function resolveTier(token) {
+  if (!token) return null;
+  const props = PropertiesService.getScriptProperties();
+  if (token === props.getProperty("AIRTABLE_MCP_TOKEN_UNATTENDED")) return "unattended";
+  if (token === props.getProperty("AIRTABLE_MCP_TOKEN_SUPERVISED")) return "supervised";
+  return null;
+}
+
+function callTool(tier, name, args) {
   if (name === "airtable_query") return airtableQuery(args);
-  if (name === "airtable_create_record") return airtableCreateRecord(args);
+  if (name === "airtable_create_record") return airtableCreateRecord(tier, args);
   throw new Error("Unknown tool: " + name);
 }
 
 function airtableQuery({ table, filterByFormula, maxRecords }) {
-  if (!ALLOWED_READ_TABLES.includes(table)) {
-    throw new Error(`Table "${table}" is not in ALLOWED_READ_TABLES.`);
+  if (!READ_TABLES.includes(table)) {
+    throw new Error(`Table "${table}" is not in READ_TABLES.`);
   }
   const params = [`maxRecords=${maxRecords || 20}`];
   if (filterByFormula) params.push("filterByFormula=" + encodeURIComponent(filterByFormula));
@@ -117,9 +136,9 @@ function airtableQuery({ table, filterByFormula, maxRecords }) {
   return { content: [{ type: "text", text: airtableFetch(url, "get") }] };
 }
 
-function airtableCreateRecord({ table, fields }) {
-  if (!ALLOWED_WRITE_TABLES.includes(table)) {
-    throw new Error(`Table "${table}" is not in ALLOWED_WRITE_TABLES.`);
+function airtableCreateRecord(tier, { table, fields }) {
+  if (!TIERS[tier].writeTables.includes(table)) {
+    throw new Error(`Table "${table}" is not writable by the "${tier}" tier.`);
   }
   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(table)}`;
   return { content: [{ type: "text", text: airtableFetch(url, "post", { fields }) }] };

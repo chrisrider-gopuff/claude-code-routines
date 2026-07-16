@@ -1,71 +1,102 @@
 # airtable-legal-tracker MCP server
 
-An Apps Script Web App that proxies the Legal Tracker Airtable base
-(`appFIB9fJCzTeFDcG`) so a Cowork plugin built from this repo can query/write
-Legal Tracker data without any installer holding `AIRTABLE_API_KEY`
-themselves. See `AirtableMcpServer.gs` for the implementation and the
-`Setup` comment at the top of that file.
+An Apps Script Web App that is the single point of contact for the Legal
+Tracker Airtable base (`appFIB9fJCzTeFDcG`) for every routine, skill, and
+Cowork plugin install that needs it. No caller — native routine, skill, or
+plugin installer — holds `AIRTABLE_API_KEY` directly; this script is the
+only thing that does. See `AirtableMcpServer.gs` for the implementation and
+the `Setup` comment at the top of that file.
 
-This is not a scheduled routine — it's a standing service the plugin's
-skills call over HTTPS. It has no relationship to the `AIRTABLE_API_KEY`
-environment variable used by `legal-tracker-triage`/`legal-tracker-triage-review`
-when they run as native Claude Code routines; those keep authenticating to
-Airtable directly, since they run in an environment you control. This
-server exists only for the Cowork-plugin distribution path, where installers
-run in their own environments and can't be handed that key.
+This is not a scheduled routine — it's a standing service other things call
+over HTTPS.
+
+## Two permission tiers
+
+Callers authenticate with one of two tokens, each scoped to a tier:
+
+- **`unattended`** — write access to `Update Matches` only. Use this for
+  anything that runs on a schedule with no human present, above all
+  `legal-tracker-triage`, which sweeps unread Gmail/Slack content every
+  morning. That content is untrusted input: this tier means that even if a
+  malicious message somehow talked the routine into attempting a write to
+  Case Activity or Cases, the server rejects it outright, rather than
+  depending on the routine's prompt to simply not ask. This is what keeps
+  `legal-tracker-triage`'s existing design intact — matches only ever land
+  in `Update Matches`, and only the Airtable Automation triggered by Chris
+  setting `Approved=Approved` copies a row into Case Activity.
+- **`supervised`** — write access to `Update Matches`, `Case Activity`, and
+  `Cases`. Use this for skills or interactive routines where a person is
+  directing each write in real time (e.g. `matter-intake`, `check-request`,
+  or a Cowork plugin session).
+
+Both tiers can read all tables (`Update Matches`, `Case Activity`,
+`Thread Matches`, `Cases`) — the tier only restricts writes.
 
 ## Deploying
 
 1. Create a new (standalone) Apps Script project at script.google.com and
    paste in `AirtableMcpServer.gs`.
 2. Project Settings -> Script Properties, set:
-   - `AIRTABLE_MCP_TOKEN` — a long random front-door token you generate
-     (e.g. `openssl rand -hex 32`). This is what plugin installers use;
-     it is not the Airtable key.
+   - `AIRTABLE_MCP_TOKEN_UNATTENDED` — token for unattended callers (e.g.
+     `legal-tracker-triage`)
+   - `AIRTABLE_MCP_TOKEN_SUPERVISED` — token for supervised callers
    - `AIRTABLE_API_KEY` — your Airtable personal access token. Never leaves
      this project.
+
+   Generate the two tokens independently (e.g. `openssl rand -hex 32` run
+   twice) — they must not share a value, or the tier split is meaningless.
 3. Deploy -> New deployment -> type: Web app. Execute as: Me. Who has
    access: Anyone. Copy the resulting `.../exec` URL.
-4. The plugin's `.mcp.json` server URL is that deployment URL with
-   `?token=<AIRTABLE_MCP_TOKEN value>` appended.
+4. Give each caller `<deployment URL>?token=<its tier's token>` as its
+   Airtable access URL / remote MCP server URL.
 
-## Testing before wiring up the plugin
+## Testing before wiring up any caller
 
-Replace `DEPLOYMENT_URL` and `TOKEN` and confirm each of these round-trips
-correctly:
+Replace `DEPLOYMENT_URL`, `SUPERVISED_TOKEN`, and `UNATTENDED_TOKEN` and
+confirm each of these round-trips correctly:
 
 ```bash
 # initialize
-curl -s -X POST "DEPLOYMENT_URL?token=TOKEN" \
+curl -s -X POST "DEPLOYMENT_URL?token=SUPERVISED_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
 
 # tools/list
-curl -s -X POST "DEPLOYMENT_URL?token=TOKEN" \
+curl -s -X POST "DEPLOYMENT_URL?token=SUPERVISED_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 
-# tools/call — read
-curl -s -X POST "DEPLOYMENT_URL?token=TOKEN" \
+# tools/call — read, either tier
+curl -s -X POST "DEPLOYMENT_URL?token=SUPERVISED_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"airtable_query","arguments":{"table":"Update Matches","maxRecords":5}}}'
+
+# tools/call — write to Case Activity with the supervised token: should succeed
+curl -s -X POST "DEPLOYMENT_URL?token=SUPERVISED_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"airtable_create_record","arguments":{"table":"Case Activity","fields":{}}}}'
+
+# tools/call — SAME write attempt with the unattended token: must be rejected
+curl -s -X POST "DEPLOYMENT_URL?token=UNATTENDED_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"airtable_create_record","arguments":{"table":"Case Activity","fields":{}}}}'
 
 # missing/wrong token should come back as a JSON-RPC error, not a 200 with data
 curl -s -X POST "DEPLOYMENT_URL?token=wrong" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":4,"method":"tools/list","params":{}}'
+  -d '{"jsonrpc":"2.0","id":6,"method":"tools/list","params":{}}'
 ```
 
-Confirm the wrong-token case actually returns the `-32001 Unauthorized`
-error before treating this as ready — Apps Script Web Apps have no
-built-in caller authentication, so this in-script check is the only gate.
+Confirm the Case-Activity-with-unattended-token call actually comes back as
+a `-32000` error (`Table "Case Activity" is not writable by the "unattended"
+tier.`) before pointing `legal-tracker-triage` at this server — that
+rejection is the whole point of the tier split, not an incidental detail.
 
 ## Known limitation
 
 Apps Script Web Apps cannot read custom HTTP request headers (`doPost(e)`
-has no `e.headers`), so the front-door token travels as a `token`
-query-string parameter rather than a standard `Authorization` header. If
-Cowork's remote MCP connector UI insists on a separate bearer-token field
-rather than letting you paste an arbitrary URL, this approach needs
-revisiting — confirm which one it actually offers before assuming this
-works end-to-end.
+has no `e.headers`), so each token travels as a `token` query-string
+parameter rather than a standard `Authorization` header. If Cowork's remote
+MCP connector UI insists on a separate bearer-token field rather than
+letting you paste an arbitrary URL, this approach needs revisiting — confirm
+which one it actually offers before assuming this works end-to-end.

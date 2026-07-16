@@ -122,21 +122,32 @@ Sweeps the past 7 days of Gmail, Slack, and Google Drive for MAJOR accomplishmen
 
 **Code:** `mcp-servers/airtable-legal-tracker/AirtableMcpServer.gs`
 
-An Apps Script Web App that proxies the Legal Tracker Airtable base
-(`appFIB9fJCzTeFDcG`) for a Cowork plugin built from this repo, so plugin
-installers can query/write Legal Tracker data without ever holding
-`AIRTABLE_API_KEY` themselves. Installers authenticate to this proxy with a
-separate front-door token (`AIRTABLE_MCP_TOKEN`, passed as a `token`
-query-string parameter — Apps Script Web Apps can't read custom request
-headers); only this script holds the real Airtable key. Writes are
-restricted in code to the `Update Matches` table — never `Case Activity`,
-which is only ever written by the Airtable Automation that promotes an
-approved row (see `legal-tracker-triage`'s prompt.md).
+An Apps Script Web App intended as the single point of contact for the
+Legal Tracker Airtable base (`appFIB9fJCzTeFDcG`) for every routine, skill,
+and Cowork plugin install that needs it — no caller holds
+`AIRTABLE_API_KEY` directly; only this script does. Callers authenticate
+with a `token` query-string parameter (Apps Script Web Apps can't read
+custom request headers, so a standard `Authorization` header never reaches
+it) that resolves to one of two permission tiers:
 
-This is unrelated to the `AIRTABLE_API_KEY` environment variable used by
-`legal-tracker-triage`/`legal-tracker-triage-review` when they run as
-native Claude Code routines — those continue to call Airtable directly.
-This server exists only for the Cowork-plugin distribution path. See
+- `unattended` — write access to `Update Matches` only. For anything that
+  runs on a schedule with no human present, above all
+  `legal-tracker-triage`, which sweeps unread Gmail/Slack content and is
+  therefore exposed to prompt injection from that content. This tier is
+  what enforces — at the server, not just by convention in the routine's
+  prompt — that matches only ever land in `Update Matches`, never directly
+  in `Case Activity`; promotion still only happens via the Airtable
+  Automation triggered by Chris setting `Approved=Approved` (see
+  `legal-tracker-triage`'s prompt.md).
+- `supervised` — write access to `Update Matches`, `Case Activity`, and
+  `Cases`. For skills or interactive routines where a person is directing
+  each write in real time (e.g. `matter-intake`, `check-request`, or a
+  Cowork plugin session).
+
+`legal-tracker-triage`/`legal-tracker-triage-review` currently call
+Airtable directly with their own `AIRTABLE_API_KEY` rather than through this
+server — consolidating them onto it (as the "one point of contact" this
+server is meant to be) is a follow-up, not yet done. See
 `mcp-servers/airtable-legal-tracker/README.md` for deployment and testing
 steps.
 
