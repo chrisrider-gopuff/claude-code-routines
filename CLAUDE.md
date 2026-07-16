@@ -43,7 +43,7 @@ Items that appear in multiple sources are consolidated into a single entry with 
 
 Sweeps Gmail and Slack for new case-related developments (48-hour window, extended to cover the weekend on Mondays), matches each to a case in the "Legal Tracker" Airtable base, and writes draft rows into the **Update Matches** table for manual review. Never writes to **Case Activity** — promotion happens via an Airtable Automation, triggered when Chris sets `Approved` to `Approved` on an Update Matches row, that copies (not moves) the row into Case Activity.
 
-**Airtable access:** Goes through the `airtable-legal-tracker` skill/server (see "MCP servers" and "Skills" below) using the `unattended` tier — never holds `AIRTABLE_API_KEY` directly. Confirms table/field names against the live schema (`airtable_get_schema`) before assuming a hardcoded name is still correct.
+**Airtable access:** Goes through the `airtable-mcp` skill/server (see "MCP servers" and "Skills" below), talking to the Legal Tracker deployment, using the `unattended` tier — never holds `AIRTABLE_API_KEY` directly. Confirms table/field names against the live schema (`airtable_get_schema`) before assuming a hardcoded name is still correct.
 
 **Matching sources:**
 1. Gmail — sender/recipient vs. Opposing Counsel contact email, Matter/claimant name, case number, or the Gmail label `!update` (always logged, even unmatched, flagged for manual case assignment)
@@ -55,7 +55,7 @@ A Thread Matches table caches thread→case matches so repeat runs skip re-match
 - Gmail (read threads, search)
 - Slack (search public and private channels; send messages)
 
-**Required environment:** `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN` (holding the `unattended` tier's token) set on the environment this routine runs from — see `mcp-servers/airtable-legal-tracker/README.md`.
+**Required environment:** `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN` (holding the Legal Tracker deployment's `unattended` tier token) set on the environment this routine runs from — see `mcp-servers/airtable-mcp/README.md`.
 
 ### legal-tracker-triage-review
 
@@ -71,7 +71,7 @@ Approved rows are deleted on a different trigger: not age, but whether the row h
 
 Only once a pattern's cumulative count reaches 5 — in either direction — and it hasn't also matched a row from the opposite verdict, which would mean the pattern is too broad, does it propose a specific edit to `legal-tracker-triage/prompt.md` as a pull request, with representative examples as evidence. A rejection pattern typically proposes an exclusion rule; an approval pattern typically proposes loosening or strengthening a matching/confidence rule. It never edits that file directly and never merges its own PR; Chris reviews and merges like any other change. Rows Chris hasn't reviewed yet (blank) are never touched.
 
-**Airtable access:** Goes through the `airtable-legal-tracker` skill/server, same as `legal-tracker-triage` — read-only plus deletes on Update Matches, never holds `AIRTABLE_API_KEY` directly. Uses the `unattended` tier token, not `supervised`, even though it doesn't need Case Activity/Cases write access — it also runs on a schedule with no human present and occasionally reads Gmail/Slack content for classification, so the more restrictive token is the consistent choice even though it's not strictly required for what this routine does.
+**Airtable access:** Goes through the `airtable-mcp` skill/server, same as `legal-tracker-triage` — read-only plus deletes on Update Matches, never holds `AIRTABLE_API_KEY` directly. Uses the `unattended` tier token, not `supervised`, even though it doesn't need Case Activity/Cases write access — it also runs on a schedule with no human present and occasionally reads Gmail/Slack content for classification, so the more restrictive token is the consistent choice even though it's not strictly required for what this routine does.
 
 **Required MCP integrations:**
 - Slack (send message for summary)
@@ -98,7 +98,7 @@ State between phases is tracked in `routines/nat-1-1-briefing/state.json`, since
 - Slack (read/search channels, send messages)
 - Google Drive (one-time seed doc read on first-ever run)
 
-**Airtable access:** Phase 1 reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the `airtable-legal-tracker` skill/server, read-only — never holds `AIRTABLE_API_KEY` directly. Uses the `unattended` tier token: Phase 1 runs on a schedule with no human present and never needs to write to Airtable at all, so the more restrictive token costs nothing functionally. Phases 2–3 don't touch Airtable.
+**Airtable access:** Phase 1 reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the `airtable-mcp` skill/server, read-only — never holds `AIRTABLE_API_KEY` directly. Uses the `unattended` tier token: Phase 1 runs on a schedule with no human present and never needs to write to Airtable at all, so the more restrictive token costs nothing functionally. Phases 2–3 don't touch Airtable.
 
 **Required environment:** `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN` (the `unattended` tier's token, same value as `legal-tracker-triage`).
 
@@ -123,71 +123,71 @@ Sweeps the past 7 days of Gmail, Slack, and Google Drive for MAJOR accomplishmen
 
 ## MCP servers
 
-### airtable-legal-tracker
+### airtable-mcp
 
-**Code:** `mcp-servers/airtable-legal-tracker/AirtableMcpServer.gs`
+**Code:** `mcp-servers/airtable-mcp/AirtableMcpServer.gs`
 
-An Apps Script Web App intended as the single point of contact for the
-Legal Tracker Airtable base (`appFIB9fJCzTeFDcG`) for every routine, skill,
-and Cowork plugin install that needs it — no caller holds
-`AIRTABLE_API_KEY` directly; only this script does. Callers authenticate
+A reusable Apps Script Web App template that proxies exactly one Airtable
+base per deployment, so no caller — native routine, skill, or Cowork plugin
+install — ever holds that base's `AIRTABLE_API_KEY` directly; the
+deployment is the only thing that does. Nothing about a specific base is
+hardcoded in the script itself — which base, which tables exist, which
+tier can write/delete where all come from that deployment's
+`AIRTABLE_MCP_CONFIG` Script Property, so proxying a different base later
+means writing a new config, not editing this file. Callers authenticate
 with a `token` query-string parameter (Apps Script Web Apps can't read
 custom request headers, so a standard `Authorization` header never reaches
-it) that resolves to one of two permission tiers:
+it) that resolves to one of two fixed tiers, each deployment-defined:
 
-- `unattended` — write access to `Update Matches` and `Thread Matches`
-  only. For anything that runs on a schedule with no human present, above
-  all `legal-tracker-triage`, which sweeps unread Gmail/Slack content and is
-  therefore exposed to prompt injection from that content. This tier is
-  what enforces — at the server, not just by convention in the routine's
-  prompt — that matches only ever land in `Update Matches`, never directly
-  in `Case Activity`; promotion still only happens via the Airtable
-  Automation triggered by Chris setting `Approved=Approved` (see
-  `legal-tracker-triage`'s prompt.md). Thread Matches is included since
-  `legal-tracker-triage` owns and maintains that match-caching table itself.
-- `supervised` — write access to `Update Matches`, `Case Activity`, and
-  `Cases`. For skills or interactive routines where a person is directing
-  each write in real time (e.g. `matter-intake`, `check-request`, or a
-  Cowork plugin session).
+- `unattended` — for anything that runs on a schedule with no human
+  present. Scoped tighter, since an unattended caller may be processing
+  untrusted content (email, chat messages) that could attempt prompt
+  injection — the server rejects an out-of-scope write outright rather
+  than depending on the caller's own prompt to simply not ask.
+- `supervised` — for skills or interactive sessions where a person is
+  directing each write in real time. Can reasonably be scoped wider.
 
-The same per-tier table list governs both creating and updating records —
-if a tier can create in a table it can also update existing records there.
-
-Deletes are governed separately from the tier/write model above: either
-tier can delete from `Update Matches` only (it's a draft/staging table —
-deleting stale or already-promoted rows there is `legal-tracker-triage-review`'s
-whole job), but nothing can delete from `Case Activity` or `Cases` through
-this proxy, regardless of tier.
-
-Reads (`airtable_query`) cover `Update Matches`, `Case Activity`,
-`Thread Matches`, `Cases`, and `Opposing Counsel`, and page via Airtable's
-own `offset` mechanism for tables over ~100 rows. `airtable_get_schema` is
+The same per-tier `writeTables` list governs both creating and updating
+records. Deletes are governed separately, via `deleteTables` — any caller,
+either tier, can delete from a table in that list; nothing can delete from
+a table outside it, regardless of tier. `airtable_query` reads any table in
+`readTables` (either tier, unrestricted) and pages via Airtable's own
+`offset` mechanism for tables over ~100 rows. `airtable_get_schema` is
 unrestricted (read-only metadata) and lets a caller detect a renamed
 table/field before trusting a hardcoded name.
 
-`legal-tracker-triage`, `legal-tracker-triage-review`, and
-`nat-1-1-briefing` now go through this server (via the
-`airtable-legal-tracker` skill below) instead of holding `AIRTABLE_API_KEY`
-directly. See `mcp-servers/airtable-legal-tracker/README.md` for deployment
-and testing steps.
+The first (and currently only) deployment of this server proxies the Legal
+Tracker base (`appFIB9fJCzTeFDcG`) for `legal-tracker-triage`,
+`legal-tracker-triage-review`, and `nat-1-1-briefing` — all three go
+through it (via the `airtable-mcp` skill below) instead of holding
+`AIRTABLE_API_KEY` directly. Its config specifically: `unattended` can
+write `Update Matches`/`Thread Matches`, `supervised` adds `Case
+Activity`/`Cases`, and `deleteTables` is `Update Matches` only — rationale
+in each routine's `prompt.md`. See `mcp-servers/airtable-mcp/README.md` for
+that deployment's actual `AIRTABLE_MCP_CONFIG` value (the checked-in source
+of truth, since it now lives in Script Properties rather than code), plus
+deployment and testing steps for standing up a new deployment against a
+different base.
 
 ## Skills
 
-### airtable-legal-tracker
+### airtable-mcp
 
-**Code:** `skills/airtable-legal-tracker/SKILL.md`
+**Code:** `skills/airtable-mcp/SKILL.md`
 
-Packages how to call the `airtable-legal-tracker` MCP server (see "MCP
-servers" above) into one reusable reference, so routine/skill prompts say
-"use the airtable-legal-tracker skill" instead of each duplicating the
-JSON-RPC call format, tool schemas, table names, and tier semantics.
-Documents both transports — calling the MCP tools directly when a
-connector is configured, or `curl`-ing the deployment URL with
-`AIRTABLE_MCP_URL`/`AIRTABLE_MCP_TOKEN` when it isn't (the current native
-routines' situation). Doesn't add any enforcement of its own — the tier and
-`DELETE_TABLES` checks in `AirtableMcpServer.gs` remain the actual security
-boundary; this skill only keeps every caller's knowledge of how to use it
-consistent and prevents that knowledge from drifting across prompt files.
+Packages how to call any deployment of the `airtable-mcp` MCP server (see
+"MCP servers" above) into one reusable reference, so routine/skill prompts
+say "use the airtable-mcp skill" instead of each duplicating the JSON-RPC
+call format, tool schemas, and tier semantics. Documents both transports —
+calling the MCP tools directly when a connector is configured, or
+`curl`-ing the deployment URL with `AIRTABLE_MCP_URL`/`AIRTABLE_MCP_TOKEN`
+when it isn't (the current native routines' situation) — and lists known
+deployments (currently just Legal Tracker) so a caller can find the right
+one without reading every routine's prompt.md. Doesn't add any enforcement
+of its own — the tier/`deleteTables` checks in `AirtableMcpServer.gs`
+remain the actual security boundary; this skill only keeps every caller's
+knowledge of how to use it consistent and prevents that knowledge from
+drifting across prompt files.
 
 ## Adding new routines
 

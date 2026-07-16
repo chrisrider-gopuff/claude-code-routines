@@ -14,7 +14,7 @@ The `Entry` text in Update Matches rows is a summary the daily routine wrote fro
 
 ## Airtable access
 
-Same as the daily routine — this routine never holds `AIRTABLE_API_KEY`; all Airtable access goes through the shared `airtable-legal-tracker` skill, using the `unattended` tier token (`$AIRTABLE_MCP_TOKEN`/`$AIRTABLE_MCP_URL`). This routine doesn't need Case Activity/Cases write access anyway, but it uses the same restrictive token as the daily routine rather than a broader one — it also runs on a schedule with no human present, and occasionally reads Gmail/Slack content for classification (Step 3), so there's no reason to hold a token capable of more than this routine actually does.
+Same as the daily routine — this routine never holds `AIRTABLE_API_KEY`; all Airtable access goes through the shared `airtable-mcp` skill, using the `unattended` tier token (`$AIRTABLE_MCP_TOKEN`/`$AIRTABLE_MCP_URL`). This routine doesn't need Case Activity/Cases write access anyway, but it uses the same restrictive token as the daily routine rather than a broader one — it also runs on a schedule with no human present, and occasionally reads Gmail/Slack content for classification (Step 3), so there's no reason to hold a token capable of more than this routine actually does.
 
 Before reading, call the skill's `airtable_get_schema` tool and confirm field names still match, in particular that **Update Matches** has an `Approved` field of type single select with options `Approved` / `Not Approved` (blank = not yet reviewed by Chris). If that field doesn't exist yet or isn't a single select, stop and post to `#tracker-updates` explaining the mismatch — do not guess at a substitute field or attempt to create/convert it yourself; Chris manages schema changes.
 
