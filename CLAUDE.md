@@ -43,7 +43,7 @@ Items that appear in multiple sources are consolidated into a single entry with 
 
 Sweeps Gmail and Slack for new case-related developments (48-hour window, extended to cover the weekend on Mondays), matches each to a case in the "Legal Tracker" Airtable base, and writes draft rows into the **Update Matches** table for manual review. Never writes to **Case Activity** — promotion happens via an Airtable Automation, triggered when Chris sets `Approved` to `Approved` on an Update Matches row, that copies (not moves) the row into Case Activity.
 
-**Airtable access:** Goes through the `airtable-mcp` skill/server (see "MCP servers" and "Skills" below), talking to the Legal Tracker deployment, using the `unattended` tier — never holds `AIRTABLE_API_KEY` directly. Confirms table/field names against the live schema (`airtable_get_schema`) before assuming a hardcoded name is still correct.
+**Airtable access:** Goes through the `airtable-mcp` skill/server (see "MCP servers" and "Skills" below), talking to the Legal Tracker deployment, using the `unsupervised` tier — never holds `AIRTABLE_API_KEY` directly. Confirms table/field names against the live schema (`airtable_get_schema`) before assuming a hardcoded name is still correct.
 
 **Matching sources:**
 1. Gmail — sender/recipient vs. Opposing Counsel contact email, Matter/claimant name, case number, or the Gmail label `!update` (always logged, even unmatched, flagged for manual case assignment)
@@ -54,8 +54,9 @@ A Thread Matches table caches thread→case matches so repeat runs skip re-match
 **Required MCP integrations:**
 - Gmail (read threads, search)
 - Slack (search public and private channels; send messages)
+- Google Sheets (range-scoped read only, via the google-sheets skill — to fetch the `unsupervised` token from the Secrets Sheet; never a whole-sheet read)
 
-**Required environment:** `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN` (holding the Legal Tracker deployment's `unattended` tier token) set on the environment this routine runs from — see `mcp-servers/airtable-mcp/README.md`.
+**Required environment:** `AIRTABLE_MCP_URL` (the deployment URL — not secret) set on the environment this routine runs from. The `unsupervised` tier token is NOT an environment variable — it's looked up at the start of each run from the private Secrets Sheet (see "Airtable access" above and `mcp-servers/airtable-mcp/README.md`).
 
 ### legal-tracker-triage-review
 
@@ -71,14 +72,15 @@ Approved rows are deleted on a different trigger: not age, but whether the row h
 
 Only once a pattern's cumulative count reaches 5 — in either direction — and it hasn't also matched a row from the opposite verdict, which would mean the pattern is too broad, does it propose a specific edit to `legal-tracker-triage/prompt.md` as a pull request, with representative examples as evidence. A rejection pattern typically proposes an exclusion rule; an approval pattern typically proposes loosening or strengthening a matching/confidence rule. It never edits that file directly and never merges its own PR; Chris reviews and merges like any other change. Rows Chris hasn't reviewed yet (blank) are never touched.
 
-**Airtable access:** Goes through the `airtable-mcp` skill/server, same as `legal-tracker-triage` — read-only plus deletes on Update Matches, never holds `AIRTABLE_API_KEY` directly. Uses the `unattended` tier token, not `supervised`, even though it doesn't need Case Activity/Cases write access — it also runs on a schedule with no human present and occasionally reads Gmail/Slack content for classification, so the more restrictive token is the consistent choice even though it's not strictly required for what this routine does.
+**Airtable access:** Goes through the `airtable-mcp` skill/server, same as `legal-tracker-triage` — read-only plus deletes on Update Matches, never holds `AIRTABLE_API_KEY` directly. Uses the `unsupervised` tier token, not `supervised`, even though it doesn't need Case Activity/Cases write access — it also runs on a schedule with no human present and occasionally reads Gmail/Slack content for classification, so the more restrictive token is the consistent choice even though it's not strictly required for what this routine does.
 
 **Required MCP integrations:**
 - Slack (send message for summary)
 - GitHub (branch, commit, open PR)
 - Gmail/Slack read access, only if an Entry's summary text isn't enough to classify why it was rejected
+- Google Sheets (range-scoped read only, via the google-sheets skill — to fetch the `unsupervised` token from the Secrets Sheet; never a whole-sheet read)
 
-**Required environment:** `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN` (the `unattended` tier's token, same value as `legal-tracker-triage`).
+**Required environment:** `AIRTABLE_MCP_URL` (not secret). Same as `legal-tracker-triage`, the `unsupervised` tier token is looked up from the Secrets Sheet at runtime, not held as an environment variable.
 
 ### nat-1-1-briefing
 
@@ -97,10 +99,11 @@ State between phases is tracked in `routines/nat-1-1-briefing/state.json`, since
 - Google Calendar (check for today's Chris/Nat 1:1)
 - Slack (read/search channels, send messages)
 - Google Drive (one-time seed doc read on first-ever run)
+- Google Sheets (range-scoped read only, via the google-sheets skill — to fetch the `unsupervised` token from the Secrets Sheet; never a whole-sheet read)
 
-**Airtable access:** Phase 1 reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the `airtable-mcp` skill/server, read-only — never holds `AIRTABLE_API_KEY` directly. Uses the `unattended` tier token: Phase 1 runs on a schedule with no human present and never needs to write to Airtable at all, so the more restrictive token costs nothing functionally. Phases 2–3 don't touch Airtable.
+**Airtable access:** Phase 1 reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the `airtable-mcp` skill/server, read-only — never holds `AIRTABLE_API_KEY` directly. Uses the `unsupervised` tier token: Phase 1 runs on a schedule with no human present and never needs to write to Airtable at all, so the more restrictive token costs nothing functionally. Phases 2–3 don't touch Airtable.
 
-**Required environment:** `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN` (the `unattended` tier's token, same value as `legal-tracker-triage`).
+**Required environment:** `AIRTABLE_MCP_URL` (not secret). Same as `legal-tracker-triage`, the `unsupervised` tier token is looked up from the Secrets Sheet at runtime, not held as an environment variable.
 
 **Note:** Several setup items are still open before this runs in production — see "Open items to resolve before going live" in `prompt.md` (review channel is currently a test channel, the API trigger/bearer token and the Slack Workflow Builder → Sheet → Apps Script chain need to be confirmed as live).
 
@@ -139,8 +142,8 @@ with a `token` query-string parameter (Apps Script Web Apps can't read
 custom request headers, so a standard `Authorization` header never reaches
 it) that resolves to one of two fixed tiers, each deployment-defined:
 
-- `unattended` — for anything that runs on a schedule with no human
-  present. Scoped tighter, since an unattended caller may be processing
+- `unsupervised` — for anything that runs on a schedule with no human
+  present. Scoped tighter, since an unsupervised caller may be processing
   untrusted content (email, chat messages) that could attempt prompt
   injection — the server rejects an out-of-scope write outright rather
   than depending on the caller's own prompt to simply not ask.
@@ -160,7 +163,7 @@ The first (and currently only) deployment of this server proxies the Legal
 Tracker base (`appFIB9fJCzTeFDcG`) for `legal-tracker-triage`,
 `legal-tracker-triage-review`, and `nat-1-1-briefing` — all three go
 through it (via the `airtable-mcp` skill below) instead of holding
-`AIRTABLE_API_KEY` directly. Its config specifically: `unattended` can
+`AIRTABLE_API_KEY` directly. Its config specifically: `unsupervised` can
 write `Update Matches`/`Thread Matches`, `supervised` adds `Case
 Activity`/`Cases`, and `deleteTables` is `Update Matches` only — rationale
 in each routine's `prompt.md`. See `mcp-servers/airtable-mcp/README.md` for
@@ -168,6 +171,16 @@ that deployment's actual `AIRTABLE_MCP_CONFIG` value (the checked-in source
 of truth, since it now lives in Script Properties rather than code), plus
 deployment and testing steps for standing up a new deployment against a
 different base.
+
+None of the three callers hold the `unsupervised` token as a plain
+environment variable — each looks it up at the start of its run from a
+private, single-owner Secrets Sheet (Google Sheet, owned solely by Chris)
+that also holds unrelated secrets for other systems. Each routine reads
+only column A to locate its token's row by name, then only that row's
+value in column B — never the whole sheet — so a routine exposed to
+untrusted swept content can't see the other secrets sharing that vault.
+See `mcp-servers/airtable-mcp/README.md` for the sheet ID and the exact
+lookup steps.
 
 ## Skills
 

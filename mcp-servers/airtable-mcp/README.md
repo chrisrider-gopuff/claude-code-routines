@@ -19,9 +19,9 @@ Script Property, described below.
 Callers authenticate with one of two tokens, each scoped to a tier defined
 in `AIRTABLE_MCP_CONFIG.tiers`:
 
-- **`unattended`** — for anything that runs on a schedule with no human
+- **`unsupervised`** — for anything that runs on a schedule with no human
   present. Scope its `writeTables` to only what that caller actually needs,
-  nothing more — an unattended caller may be processing untrusted content
+  nothing more — an unsupervised caller may be processing untrusted content
   (email, chat messages) that could attempt prompt injection, and this tier
   existing means the server rejects an out-of-scope write outright rather
   than depending on the caller's own prompt to simply not ask.
@@ -54,7 +54,7 @@ table.
    - `AIRTABLE_API_KEY` — this base's Airtable personal access token. Never
      leaves this project.
    - `AIRTABLE_BASE_ID` — this base's ID, e.g. `appXXXXXXXXXXXXXX`.
-   - `AIRTABLE_MCP_TOKEN_UNATTENDED` — token for unattended callers.
+   - `AIRTABLE_MCP_TOKEN_UNSUPERVISED` — token for unsupervised callers.
    - `AIRTABLE_MCP_TOKEN_SUPERVISED` — token for supervised callers.
    - `AIRTABLE_MCP_CONFIG` — a JSON string (see shape in `AirtableMcpServer.gs`'s
      Setup comment, and the worked example below).
@@ -81,7 +81,7 @@ exist as tribal knowledge in one Apps Script project's settings.
   "name": "airtable-legal-tracker",
   "readTables": ["Update Matches", "Case Activity", "Thread Matches", "Cases", "Opposing Counsel"],
   "tiers": {
-    "unattended": { "writeTables": ["Update Matches", "Thread Matches"] },
+    "unsupervised": { "writeTables": ["Update Matches", "Thread Matches"] },
     "supervised": { "writeTables": ["Update Matches", "Case Activity", "Cases"] }
   },
   "deleteTables": ["Update Matches"]
@@ -95,9 +95,24 @@ be the source of truth for the config's actual current value.
 
 `AIRTABLE_BASE_ID` for this deployment is `appFIB9fJCzTeFDcG`.
 
+**How `legal-tracker-triage`, `legal-tracker-triage-review`, and
+`nat-1-1-briefing` get the `unsupervised` token:** not a plain environment
+variable — they look it up at the start of each run from a private,
+single-owner ("Secrets Sheet") Google Sheet (spreadsheet ID
+`1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned solely by
+`chris.rider@gopuff.com`, no other collaborators) that also holds several
+unrelated secrets for other systems (the Airtable API key itself,
+BrightFlag credentials, a routines API token). Each routine reads only
+column A to locate the row labeled `AIRTABLE_MCP_TOKEN_UNSUPERVISED`, then
+reads only that row's column B cell for the value — never the whole sheet
+— so a routine exposed to untrusted swept content never gains visibility
+into the other secrets living in the same vault. See each routine's
+`prompt.md` for the exact lookup steps. `AIRTABLE_MCP_URL` (not a secret,
+just the deployment URL) is still a plain environment variable.
+
 ## Testing before wiring up any caller
 
-Replace `DEPLOYMENT_URL`, `SUPERVISED_TOKEN`, and `UNATTENDED_TOKEN` and
+Replace `DEPLOYMENT_URL`, `SUPERVISED_TOKEN`, and `UNSUPERVISED_TOKEN` and
 confirm each of these round-trips correctly (examples use the Legal Tracker
 config above — substitute table names for a different deployment):
 
@@ -122,23 +137,23 @@ curl -s -X POST "DEPLOYMENT_URL?token=SUPERVISED_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"airtable_create_record","arguments":{"table":"Case Activity","fields":{}}}}'
 
-# tools/call — SAME write attempt with the unattended token: must be rejected
-curl -s -X POST "DEPLOYMENT_URL?token=UNATTENDED_TOKEN" \
+# tools/call — SAME write attempt with the unsupervised token: must be rejected
+curl -s -X POST "DEPLOYMENT_URL?token=UNSUPERVISED_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"airtable_create_record","arguments":{"table":"Case Activity","fields":{}}}}'
 
 # tools/call — update an existing Update Matches row, either tier: should succeed
-curl -s -X POST "DEPLOYMENT_URL?token=UNATTENDED_TOKEN" \
+curl -s -X POST "DEPLOYMENT_URL?token=UNSUPERVISED_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"airtable_update_record","arguments":{"table":"Update Matches","recordId":"recXXXXXXXXXXXXXX","fields":{}}}}'
 
-# tools/call — update Case Activity with the unattended token: must be rejected
-curl -s -X POST "DEPLOYMENT_URL?token=UNATTENDED_TOKEN" \
+# tools/call — update Case Activity with the unsupervised token: must be rejected
+curl -s -X POST "DEPLOYMENT_URL?token=UNSUPERVISED_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"airtable_update_record","arguments":{"table":"Case Activity","recordId":"recXXXXXXXXXXXXXX","fields":{}}}}'
 
 # tools/call — delete from Update Matches with either token: should succeed
-curl -s -X POST "DEPLOYMENT_URL?token=UNATTENDED_TOKEN" \
+curl -s -X POST "DEPLOYMENT_URL?token=UNSUPERVISED_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"airtable_delete_record","arguments":{"table":"Update Matches","recordId":"recXXXXXXXXXXXXXX"}}}'
 
@@ -153,9 +168,9 @@ curl -s -X POST "DEPLOYMENT_URL?token=wrong" \
   -d '{"jsonrpc":"2.0","id":10,"method":"tools/list","params":{}}'
 ```
 
-Confirm the Case-Activity-with-unattended-token create call actually comes
+Confirm the Case-Activity-with-unsupervised-token create call actually comes
 back as a `-32000` error (`Table "Case Activity" is not writable by the
-"unattended" tier.`) before pointing any unattended caller at this server —
+"unsupervised" tier.`) before pointing any unsupervised caller at this server —
 that rejection is the whole point of the tier split, not an incidental
 detail. Same for the Case-Activity delete attempt: it must fail with
 `Table "Case Activity" is not in this deployment's deleteTables.` even

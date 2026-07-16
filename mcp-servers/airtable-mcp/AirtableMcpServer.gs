@@ -18,7 +18,7 @@
 // read at all are NOT hardcoded here — they come from this deployment's
 // AIRTABLE_MCP_CONFIG Script Property (see Setup below), so redeploying for
 // a new base means writing a new config value, not editing this file.
-//   - "unattended": intended for anything that runs on a schedule with no
+//   - "unsupervised": intended for anything that runs on a schedule with no
 //     human present — scope it to only what that caller needs to write,
 //     nothing more, since it may be processing untrusted content (email,
 //     chat messages) that could attempt prompt injection. The server
@@ -27,7 +27,7 @@
 //     two tiers instead of one.
 //   - "supervised": intended for skills or interactive sessions where a
 //     person is directing each write in real time — can reasonably be
-//     scoped wider than unattended.
+//     scoped wider than unsupervised.
 //
 // Deletes are governed separately from the tier/writeTables model above —
 // see AIRTABLE_MCP_CONFIG.deleteTables. Any caller (either tier) can delete
@@ -37,16 +37,16 @@
 //
 // Setup (once per Airtable base you want to proxy):
 //   1. In this Apps Script project's Project Settings -> Script Properties, set:
-//        AIRTABLE_API_KEY               — this base's Airtable personal access token (never shared)
+//        AIRTABLE_API_KEY                — this base's Airtable personal access token (never shared)
 //        AIRTABLE_BASE_ID                — this base's ID, e.g. "appXXXXXXXXXXXXXX"
-//        AIRTABLE_MCP_TOKEN_UNATTENDED   — front-door token for unattended callers
+//        AIRTABLE_MCP_TOKEN_UNSUPERVISED  — front-door token for unsupervised callers
 //        AIRTABLE_MCP_TOKEN_SUPERVISED   — front-door token for supervised callers
-//        AIRTABLE_MCP_CONFIG             — JSON string, shape:
+//        AIRTABLE_MCP_CONFIG              — JSON string, shape:
 //          {
 //            "name": "optional server label, defaults to airtable-mcp",
 //            "readTables": ["Table A", "Table B", ...],
 //            "tiers": {
-//              "unattended": { "writeTables": ["Table A"] },
+//              "unsupervised": { "writeTables": ["Table A"] },
 //              "supervised": { "writeTables": ["Table A", "Table B"] }
 //            },
 //            "deleteTables": ["Table A"]
@@ -79,10 +79,10 @@ function getConfig() {
   if (!Array.isArray(parsed.readTables)) {
     throw new Error("AIRTABLE_MCP_CONFIG.readTables must be an array.");
   }
-  const unattendedWrite = parsed.tiers && parsed.tiers.unattended && parsed.tiers.unattended.writeTables;
+  const unsupervisedWrite = parsed.tiers && parsed.tiers.unsupervised && parsed.tiers.unsupervised.writeTables;
   const supervisedWrite = parsed.tiers && parsed.tiers.supervised && parsed.tiers.supervised.writeTables;
-  if (!Array.isArray(unattendedWrite) || !Array.isArray(supervisedWrite)) {
-    throw new Error("AIRTABLE_MCP_CONFIG.tiers must define unattended.writeTables and supervised.writeTables arrays.");
+  if (!Array.isArray(unsupervisedWrite) || !Array.isArray(supervisedWrite)) {
+    throw new Error("AIRTABLE_MCP_CONFIG.tiers must define unsupervised.writeTables and supervised.writeTables arrays.");
   }
   if (!Array.isArray(parsed.deleteTables)) {
     throw new Error("AIRTABLE_MCP_CONFIG.deleteTables must be an array.");
@@ -201,7 +201,7 @@ function doPost(e) {
 function resolveTier(token) {
   if (!token) return null;
   const props = PropertiesService.getScriptProperties();
-  if (token === props.getProperty("AIRTABLE_MCP_TOKEN_UNATTENDED")) return "unattended";
+  if (token === props.getProperty("AIRTABLE_MCP_TOKEN_UNSUPERVISED")) return "unsupervised";
   if (token === props.getProperty("AIRTABLE_MCP_TOKEN_SUPERVISED")) return "supervised";
   return null;
 }

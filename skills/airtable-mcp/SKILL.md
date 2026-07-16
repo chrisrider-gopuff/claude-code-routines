@@ -67,8 +67,8 @@ Which token is in `AIRTABLE_MCP_TOKEN` (or which connector you're using)
 determines what you can write. Every deployment has exactly these two
 fixed tiers, but each deployment defines its own `writeTables` per tier:
 
-- **`unattended`** — for anything that runs on a schedule with no human
-  present. Scoped tighter, since an unattended caller may be processing
+- **`unsupervised`** — for anything that runs on a schedule with no human
+  present. Scoped tighter, since an unsupervised caller may be processing
   untrusted content (email, chat messages) that could attempt prompt
   injection — that's enforced by the server, not by this skill or the
   caller's own prompt.
@@ -85,8 +85,8 @@ will reject anything out of scope.
 ## Handling rejections
 
 A tier or delete-scope rejection (e.g. `Table "X" is not writable by the
-"unattended" tier.`) is a deliberate guardrail, not a bug or a
-misconfiguration to work around. If you're running unattended and hit one,
+"unsupervised" tier.`) is a deliberate guardrail, not a bug or a
+misconfiguration to work around. If you're running unsupervised and hit one,
 don't retry against a different table, don't retry with different
 casing/wording, and don't try to route around it via a different
 operation — stop, and if you were expecting to log something there, log it
@@ -99,9 +99,14 @@ before assuming it's a permissions issue.
 ## Required environment (native-routine / curl path only)
 
 - `AIRTABLE_MCP_URL` — the Apps Script Web App deployment URL for the base
-  this caller needs (no query string).
+  this caller needs (no query string). Not secret, always a plain
+  environment variable.
 - `AIRTABLE_MCP_TOKEN` — whichever tier's token matches this caller's trust
-  level, set at the environment level. Never the raw `AIRTABLE_API_KEY`.
+  level. Never the raw `AIRTABLE_API_KEY`. Sourcing varies by deployment and
+  caller — some are a plain environment variable set at the environment
+  level; others (see "Known deployments") are looked up at runtime from a
+  private secrets store instead of ever sitting in the environment config.
+  Check that deployment's entry below before assuming it's a bare env var.
 
 See `mcp-servers/airtable-mcp/README.md` for how these are provisioned
 server-side, and for how to stand up a new deployment for a different base.
@@ -115,6 +120,13 @@ server-side, and for how to stand up a new deployment for a different base.
   write/delete where, and why) is documented in
   `mcp-servers/airtable-mcp/README.md`'s "Worked example" section — that
   file, not this one, is the source of truth for its current value.
+  **Token sourcing:** none of these three callers hold `AIRTABLE_MCP_TOKEN`
+  as a plain environment variable — they look up the `unsupervised` token
+  at the start of each run from a private, single-owner Secrets Sheet
+  (range-scoped read: locate the row by key name in column A, read only
+  that row's value in column B — never the whole sheet, which also holds
+  unrelated secrets for other systems). See `mcp-servers/airtable-mcp/README.md`
+  and each routine's `prompt.md` for the exact steps.
 
 Add an entry here whenever a new base gets its own deployment, so a caller
 can find the right one without reading every routine's prompt.md.
