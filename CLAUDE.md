@@ -161,6 +161,24 @@ server is meant to be) is a follow-up, not yet done. See
 `mcp-servers/airtable-legal-tracker/README.md` for deployment and testing
 steps.
 
+## Skills
+
+### airtable-legal-tracker
+
+**Code:** `skills/airtable-legal-tracker/SKILL.md`
+
+Packages how to call the `airtable-legal-tracker` MCP server (see "MCP
+servers" above) into one reusable reference, so routine/skill prompts say
+"use the airtable-legal-tracker skill" instead of each duplicating the
+JSON-RPC call format, tool schemas, table names, and tier semantics.
+Documents both transports — calling the MCP tools directly when a
+connector is configured, or `curl`-ing the deployment URL with
+`AIRTABLE_MCP_URL`/`AIRTABLE_MCP_TOKEN` when it isn't (the current native
+routines' situation). Doesn't add any enforcement of its own — the tier and
+`DELETE_TABLES` checks in `AirtableMcpServer.gs` remain the actual security
+boundary; this skill only keeps every caller's knowledge of how to use it
+consistent and prevents that knowledge from drifting across prompt files.
+
 ## Adding new routines
 
 1. Create a directory under `routines/<routine-name>/`
