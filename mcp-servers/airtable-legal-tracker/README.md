@@ -14,23 +14,34 @@ over HTTPS.
 
 Callers authenticate with one of two tokens, each scoped to a tier:
 
-- **`unattended`** — write access to `Update Matches` only. Use this for
-  anything that runs on a schedule with no human present, above all
-  `legal-tracker-triage`, which sweeps unread Gmail/Slack content every
-  morning. That content is untrusted input: this tier means that even if a
-  malicious message somehow talked the routine into attempting a write to
-  Case Activity or Cases, the server rejects it outright, rather than
+- **`unattended`** — write access to `Update Matches` and `Thread Matches`
+  only. Use this for anything that runs on a schedule with no human present,
+  above all `legal-tracker-triage`, which sweeps unread Gmail/Slack content
+  every morning. That content is untrusted input: this tier means that even
+  if a malicious message somehow talked the routine into attempting a write
+  to Case Activity or Cases, the server rejects it outright, rather than
   depending on the routine's prompt to simply not ask. This is what keeps
   `legal-tracker-triage`'s existing design intact — matches only ever land
   in `Update Matches`, and only the Airtable Automation triggered by Chris
-  setting `Approved=Approved` copies a row into Case Activity.
+  setting `Approved=Approved` copies a row into Case Activity. Thread
+  Matches is included because `legal-tracker-triage` owns and maintains
+  that match-caching table itself.
 - **`supervised`** — write access to `Update Matches`, `Case Activity`, and
   `Cases`. Use this for skills or interactive routines where a person is
   directing each write in real time (e.g. `matter-intake`, `check-request`,
   or a Cowork plugin session).
 
+The same per-tier table list governs both `airtable_create_record` and
+`airtable_update_record` — if a tier can create in a table, it can also
+update existing records there, and vice versa.
+
 Both tiers can read all tables (`Update Matches`, `Case Activity`,
 `Thread Matches`, `Cases`) — the tier only restricts writes.
+
+Deletes are separate from the tier model above: either tier can delete from
+`Update Matches` (it's a draft/staging table — that's literally
+`legal-tracker-triage-review`'s job), but nothing can delete from
+`Case Activity` or `Cases` through this proxy, regardless of tier.
 
 ## Deploying
 
@@ -81,16 +92,39 @@ curl -s -X POST "DEPLOYMENT_URL?token=UNATTENDED_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"airtable_create_record","arguments":{"table":"Case Activity","fields":{}}}}'
 
+# tools/call — update an existing Update Matches row, either tier: should succeed
+curl -s -X POST "DEPLOYMENT_URL?token=UNATTENDED_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"airtable_update_record","arguments":{"table":"Update Matches","recordId":"recXXXXXXXXXXXXXX","fields":{}}}}'
+
+# tools/call — update Case Activity with the unattended token: must be rejected
+curl -s -X POST "DEPLOYMENT_URL?token=UNATTENDED_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"airtable_update_record","arguments":{"table":"Case Activity","recordId":"recXXXXXXXXXXXXXX","fields":{}}}}'
+
+# tools/call — delete from Update Matches with either token: should succeed
+curl -s -X POST "DEPLOYMENT_URL?token=UNATTENDED_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"airtable_delete_record","arguments":{"table":"Update Matches","recordId":"recXXXXXXXXXXXXXX"}}}'
+
+# tools/call — delete from Case Activity with either token: must be rejected
+curl -s -X POST "DEPLOYMENT_URL?token=SUPERVISED_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"airtable_delete_record","arguments":{"table":"Case Activity","recordId":"recXXXXXXXXXXXXXX"}}}'
+
 # missing/wrong token should come back as a JSON-RPC error, not a 200 with data
 curl -s -X POST "DEPLOYMENT_URL?token=wrong" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":6,"method":"tools/list","params":{}}'
+  -d '{"jsonrpc":"2.0","id":10,"method":"tools/list","params":{}}'
 ```
 
-Confirm the Case-Activity-with-unattended-token call actually comes back as
-a `-32000` error (`Table "Case Activity" is not writable by the "unattended"
-tier.`) before pointing `legal-tracker-triage` at this server — that
-rejection is the whole point of the tier split, not an incidental detail.
+Confirm the Case-Activity-with-unattended-token create call actually comes
+back as a `-32000` error (`Table "Case Activity" is not writable by the
+"unattended" tier.`) before pointing `legal-tracker-triage` at this server —
+that rejection is the whole point of the tier split, not an incidental
+detail. Same for the Case-Activity delete attempt: it must fail with
+`Table "Case Activity" is not in DELETE_TABLES.` even though the supervised
+token can otherwise write to that table.
 
 ## Known limitation
 

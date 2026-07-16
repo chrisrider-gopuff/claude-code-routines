@@ -130,19 +130,29 @@ with a `token` query-string parameter (Apps Script Web Apps can't read
 custom request headers, so a standard `Authorization` header never reaches
 it) that resolves to one of two permission tiers:
 
-- `unattended` — write access to `Update Matches` only. For anything that
-  runs on a schedule with no human present, above all
-  `legal-tracker-triage`, which sweeps unread Gmail/Slack content and is
+- `unattended` — write access to `Update Matches` and `Thread Matches`
+  only. For anything that runs on a schedule with no human present, above
+  all `legal-tracker-triage`, which sweeps unread Gmail/Slack content and is
   therefore exposed to prompt injection from that content. This tier is
   what enforces — at the server, not just by convention in the routine's
   prompt — that matches only ever land in `Update Matches`, never directly
   in `Case Activity`; promotion still only happens via the Airtable
   Automation triggered by Chris setting `Approved=Approved` (see
-  `legal-tracker-triage`'s prompt.md).
+  `legal-tracker-triage`'s prompt.md). Thread Matches is included since
+  `legal-tracker-triage` owns and maintains that match-caching table itself.
 - `supervised` — write access to `Update Matches`, `Case Activity`, and
   `Cases`. For skills or interactive routines where a person is directing
   each write in real time (e.g. `matter-intake`, `check-request`, or a
   Cowork plugin session).
+
+The same per-tier table list governs both creating and updating records —
+if a tier can create in a table it can also update existing records there.
+
+Deletes are governed separately from the tier/write model above: either
+tier can delete from `Update Matches` only (it's a draft/staging table —
+deleting stale or already-promoted rows there is `legal-tracker-triage-review`'s
+whole job), but nothing can delete from `Case Activity` or `Cases` through
+this proxy, regardless of tier.
 
 `legal-tracker-triage`/`legal-tracker-triage-review` currently call
 Airtable directly with their own `AIRTABLE_API_KEY` rather than through this
