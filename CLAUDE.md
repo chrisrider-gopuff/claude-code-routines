@@ -133,7 +133,7 @@ Sweeps the past 7 days of Gmail, Slack, and Google Drive for MAJOR accomplishmen
 
 Steps back from the day-to-day #morning-briefing posts (produced by `daily-brief`) and Chris's replies to them, to surface a week-level view: larger themes across the week's items, new cases that came in with a synopsis and status, upcoming deadlines, and any tasks that silently fell off a daily brief without being resolved.
 
-**Note:** originally ran only as a Routine prompt typed directly into the webui, with no file in this repo — formalized here. The destination channel for its summary is still an open item; see `prompt.md`.
+**Note:** originally ran only as a Routine prompt typed directly into the webui, with no file in this repo — formalized here. Posts to the dedicated `#weekly-briefing` channel (`C0BFUJ8LYJV`), confirmed by Chris 2026-07-21 — see `prompt.md`.
 
 **Required MCP integrations:**
 - Slack (search/read `#morning-briefing`, send message)
