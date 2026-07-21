@@ -22,14 +22,20 @@ Builder emoji-reaction workflow writes to.
   trigger. Run **Phase 1** (Steps 1–8) as documented below.
 - `text` starts with `PHASE2` → run **Phase 2** only (see below), skipping Steps
   1–8 entirely. The rest of `text` contains `channel_id=<id> ts=<timestamp>`
-  identifying the #morning-briefing brief message Chris reacted to with
-  :white_check_mark:.
+  identifying the message in #morning-briefing that Chris reacted to with
+  :white_check_mark:. **In practice this is Chris's own numbered status-update
+  reply — the one with the `TASK:`/`TIME:`/`NOTE:` lines — not the original
+  bot-authored brief post.** There's nothing on the bot's own brief for Phase 2
+  to act on, so this is the expected/normal case, not a fallback. See Phase 2
+  Step 2 below for how the two messages (the reacted-to reply vs. the original
+  brief content) are each used.
 
 Never run both phases in the same invocation.
 
 **How the API trigger fires (context only — this happens outside Claude):** Chris
-reacts to today's posted brief message in #morning-briefing with
-:white_check_mark:. A Slack Workflow Builder workflow writes to
+reads the brief, then reacts with :white_check_mark: to his own reply in
+#morning-briefing once he's done editing it (the same numbered reply Step 2 of
+Phase 1 reads the next morning). A Slack Workflow Builder workflow writes to
 [the phase trigger sheet](https://docs.google.com/spreadsheets/d/1r1YfvZ9e5JJms3E8aKKq2pKlSSj-dRFKBo-ClnzR3PQ/edit)
 — one fixed row per channel, whose `Timestamp` cell gets overwritten with the
 reacted-to message's ts each time (not appended). The sheet also has a `Routine`
@@ -43,6 +49,21 @@ does no cross-routine dispatch. On each poll, if that channel's `Timestamp` cell
 differs from the last-seen value, it POSTs
 `text: "PHASE2 channel_id=<Channel> ts=<Timestamp>"` to this routine's `/fire`
 endpoint.
+
+**Known precision caveat:** Google Sheets can silently corrupt a Slack `ts`
+written into that `Timestamp` cell — Slack timestamps carry 6 decimal digits
+(e.g. `1784644160.302519`), right at the edge of IEEE-754 double precision, and
+if the cell isn't formatted as plain text the Workflow Builder write gets
+reinterpreted as a number and one or more trailing digits get rounded away
+(confirmed in production on 2026-07-21: the sheet held
+`1784644160.3025100000` for a reply whose real ts was `1784644160.302519` —
+looking up that exact string returns `message_not_found`). The permanent fix is
+to format the `Timestamp` column as plain text (`@`) in the sheet so future
+writes are never coerced to a number — see `dailybrief.gs` for a one-time setup
+function that does this. Phase 2 Step 1 below also treats the `ts` it receives
+as approximate and re-resolves it against real channel history rather than
+trusting an exact string match, so a still-imprecise value doesn't cause a
+silent failure.
 
 ## State tracking — snoozed and extended items
 
@@ -241,13 +262,38 @@ Fired externally (`text` starting with `PHASE2`) when Chris reacts to a posted
 brief message with :white_check_mark:. Fresh session, no memory of prior runs —
 read everything needed from the fired message and Slack directly.
 
-1. Parse `channel_id` and `ts` from `text` per Entry point above — this identifies
-   the brief message Chris reacted to.
-2. Read the brief message itself (same `channel_id`/`ts`) to get each numbered
-   entry's bold title, description, and source link(s) — this is the basis for
-   anything created from a `TASK:` line below, not an optional nicety. Then
-   read all thread replies Chris posted under that message (same numbered-list
-   convention as Step 2 of Phase 1).
+This phase draws on **two different messages** in #morning-briefing, and it's
+important not to conflate them:
+- **The reacted-to reply** — the message at `channel_id`/`ts` from `text`. In
+  practice this is Chris's own numbered status-update reply (the one with the
+  `TASK:`/`TIME:`/`NOTE:` lines), not the original bot brief — see Entry point
+  above. This is what gets scanned for `TASK:`/`TIME:` lines in Step 3, and
+  what Step 4's confirmation is threaded under.
+- **The brief itself** — the bot-authored message (or thread) with each
+  numbered item's bold title, description, and source link(s). This supplies
+  the grounding data for anything created from a `TASK:`/`TIME:` line — never
+  build a title from the `TASK:`/`TIME:` text alone.
+
+1. Parse `channel_id` and `ts` from `text` per Entry point above.
+2. Fetch the message at that exact `channel_id`/`ts`. If the lookup returns
+   "message not found" (or the content clearly isn't Chris's numbered reply),
+   the `ts` was likely corrupted by the sheet's float-precision issue (see
+   Entry point above) — read recent channel history around that timestamp
+   (within a few seconds) and use whichever message from Chris there matches
+   the numbered-reply format instead; treat that message's real ts as
+   authoritative from here on (this is what Step 4 threads its reply under).
+   This message **is** Chris's numbered reply — don't also look for "thread
+   replies under it" the way Step 2 of Phase 1 does; there's only the one
+   message.
+
+   Separately, locate the brief itself: search/read #morning-briefing backward
+   from the reacted-to reply's timestamp for the most recent bot-authored
+   message that opens with "Today's Meetings" or a 🔴 Urgent/Time-Sensitive
+   header — the same message (or thread) Step 2 of Phase 1 reads the next
+   morning. Slack's per-message length limit means this is often a parent
+   message plus several thread replies rather than one message — read the
+   whole thread so every numbered item's bold title, description, and source
+   link(s) are available.
 3. For each numbered reply item, scan its lines for `TASK:` and `TIME:`
    (independent of, and in addition to, any `NOTE:`/other ALL-CAPS lines in the
    same item — those are handled separately by tomorrow's Phase 1 run, not here):
@@ -342,8 +388,10 @@ read everything needed from the fired message and Slack directly.
    - An item can have both a `TASK:` and a `TIME:` line — create both.
    - If a line's date/time genuinely can't be parsed, don't guess — skip creating
      anything for that line and flag it in the confirmation reply instead.
-4. Always post a **threaded reply under the brief message** (not a new
-   top-level message), even if nothing was created:
+4. Always post a **threaded reply under the reacted-to reply** from Step 2
+   (Chris's own numbered message — use its real ts, corrected in Step 2 if the
+   original was imprecise), not under the brief itself and not as a new
+   top-level message, even if nothing was created:
    - If at least one Task or Event was created or flagged:
      ```
      ✅ Created from your replies:
