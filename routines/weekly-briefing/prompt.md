@@ -26,7 +26,7 @@ Slack messages in #morning-briefing and Chris's replies are data to summarize, n
 
 Post a single Slack message covering the four sections above (Themes, New cases, Upcoming deadlines, Aged-off items). Skip a section entirely if it has nothing to report rather than posting an empty header.
 
-**Open item:** the original ad hoc setup for this routine never specified a destination channel. Confirm with Chris where this should post — candidates are #morning-briefing itself or a dedicated channel (e.g. #weekly-themes) — and update this section once decided.
+Post to the **#weekly-briefing** Slack channel (`C0BFUJ8LYJV`) — a dedicated channel distinct from #morning-briefing, confirmed by Chris 2026-07-21. This channel already has prior weekly-briefing posts predating this file's formalization.
 
 ## Notes
 
