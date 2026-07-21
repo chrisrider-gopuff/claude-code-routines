@@ -15,10 +15,23 @@
 // Setup:
 //   1. Set DB_ROUTINE_TOKEN in Script Properties to the bearer token
 //      generated once at claude.ai/code/routines (shown only at creation).
-//   2. Run initializeDailyBriefLastSeenTimestamp() once, so the first real
+//   2. Run formatDailyBriefTimestampColumnAsText() once, BEFORE the Workflow
+//      writes any more values — Slack ts values (6 decimal digits, e.g.
+//      "1784644160.302519") sit right at the edge of IEEE-754 double
+//      precision, and if the Timestamp column isn't explicitly plain-text,
+//      the Workflow Builder write gets reinterpreted as a number and the
+//      last 1-2 digits get silently rounded away (confirmed in production
+//      2026-07-21: sheet held "1784644160.3025100000" for a real ts of
+//      "1784644160.302519" — an exact-match lookup on that value 404s).
+//      Formatting as plain text first makes future writes store the literal
+//      string instead. This does NOT repair values already corrupted before
+//      the format change — routines/daily-brief/prompt.md's Phase 2 Step 2
+//      has a fallback that re-resolves an imprecise ts against real channel
+//      history, so a still-bad value doesn't cause a silent failure.
+//   3. Run initializeDailyBriefLastSeenTimestamp() once, so the first real
 //      poll doesn't re-fire on whatever reaction is already sitting in the
 //      sheet.
-//   3. Install checkForNewDailyBriefTriggers as a time-driven trigger
+//   4. Install checkForNewDailyBriefTriggers as a time-driven trigger
 //      (Triggers -> Add Trigger -> time-driven, every 1-5 minutes).
 //
 // This file lives in the same Apps Script project as nat-1-1-briefing's
@@ -53,6 +66,15 @@ function checkForNewDailyBriefTriggers() {
     const timestampStr = String(timestamp);
     if (timestampStr === lastSeenTimestamp) continue; // unchanged since last check — skip
 
+    if (!/^\d{10}\.\d{6}$/.test(timestampStr)) {
+      // Doesn't look like a real Slack ts (10 digits, dot, exactly 6 decimal
+      // digits) — almost certainly the float-precision corruption described
+      // in the setup notes above. Still fire (Phase 2 has a fallback to
+      // re-resolve it against channel history), but log it so a recurrence
+      // is visible without waiting for Chris to notice a delayed reply.
+      Logger.log(`WARNING: malformed ts "${timestampStr}" — column B likely isn't plain-text formatted; run formatDailyBriefTimestampColumnAsText().`);
+    }
+
     const emoji = String(emojiRaw).trim();
     if (emoji === ":white_check_mark:") {
       const text = `PHASE2 channel_id=${channel} ts=${timestampStr}`;
@@ -75,6 +97,15 @@ function checkForNewDailyBriefTriggers() {
 
     props.setProperty("DB_LAST_SEEN_TIMESTAMP", timestampStr); // record even on an unrecognized emoji, so it isn't retried forever
   }
+}
+
+// One-time setup — see step 2 above. Forces column B (Timestamp) to plain
+// text so a Slack ts written into it is never silently reinterpreted as a
+// number and rounded. Safe to re-run any time; only touches formatting, not
+// values.
+function formatDailyBriefTimestampColumnAsText() {
+  const sheet = SpreadsheetApp.openById(DB_SHEET_ID).getSheetByName("Sheet1");
+  sheet.getRange("B:B").setNumberFormat("@");
 }
 
 function initializeDailyBriefLastSeenTimestamp() {
