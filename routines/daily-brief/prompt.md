@@ -339,13 +339,16 @@ important not to conflate them:
        different angle) — fold it in; don't discard the entry and use only
        his words as the title. If he wrote nothing else, the title is built
        purely from the entry.
-     - **Description** (the event's `description` field): always include the
+     - **Description** (the event's `description` field): always lead with
+       the entry's full text as it appeared in the brief — the bold title and
+       its summary sentence(s), plus every sub-bullet if the entry was
+       consolidated from multiple sources — so the event is self-contained
+       and readable without needing to reopen the brief. Follow it with the
        entry's underlying source link(s) — the same Gmail/Slack/Calendar
-       link(s) shown under that numbered item in the brief — one per line,
-       plus `From Daily Brief item #<n>`. If the entry was consolidated from
-       multiple sources, include every source link. If the entry genuinely has
-       no source link, write `(source not found)` rather than omitting the
-       description.
+       link(s) shown under that numbered item — one per line, then
+       `From Daily Brief item #<n>`. If the entry genuinely has no source
+       link, write `(source not found)` in place of the link(s) rather than
+       omitting that part of the description.
      - **If `<datetime>` names a specific time** (e.g. `at 3pm Thursday`, `at
        2:00pm`): resolve it to a start time (America/New_York), default to a
        30-minute duration unless a range is given, calendar =
