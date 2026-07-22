@@ -330,15 +330,18 @@ important not to conflate them:
      create a Calendar event grounded in the brief entry Chris is replying
      to — never in the `TIME:` text alone, directly via the Google Calendar
      MCP tool (`create_event`, no Apps Script call for this one):
-     - **Title** (`summary`): build from the entry's bold title and its stated
-       next action (e.g. `Smith settlement demand — call with opposing
-       counsel`). If Chris wrote anything after `TIME:` besides the
-       `at <datetime>` clause (or besides the vague/relative reference
-       itself), treat it as a refinement that edits or narrows the
-       entry-derived title (a more specific instruction, a correction, a
-       different angle) — fold it in; don't discard the entry and use only
-       his words as the title. If he wrote nothing else, the title is built
-       purely from the entry.
+     - **Title** (`summary`): always prefix with `Work Block: `, then build
+       the rest from the entry's bold title and its stated next action (e.g.
+       `Work Block: Smith settlement demand — call with opposing counsel`).
+       If Chris wrote anything after `TIME:` besides the `at <datetime>`
+       clause (or besides the vague/relative reference itself), treat it as a
+       refinement that edits or narrows the entry-derived title (a more
+       specific instruction, a correction, a different angle) — fold it in;
+       don't discard the entry and use only his words as the title. If he
+       wrote nothing else, the title is built purely from the entry. The
+       `Work Block: ` prefix applies either way — specific-time and
+       vague-reference events alike are blocks on Chris's own calendar, not
+       invitations to other attendees.
      - **Description** (the event's `description` field): always lead with
        the entry's full text as it appeared in the brief — the bold title and
        its summary sentence(s), plus every sub-bullet if the entry was
@@ -399,7 +402,7 @@ important not to conflate them:
      ```
      ✅ Created from your replies:
      • Item #3 — Task "Smith settlement demand — send counterdemand draft" (due 2026-07-17)
-     • Item #7 — Event "Nat 1:1 prep — call with opposing counsel" (Thu Jul 16, 3:00–3:30pm ET)
+     • Item #7 — Event "Work Block: Nat 1:1 prep — call with opposing counsel" (Thu Jul 16, 3:00–3:30pm ET)
 
      ⚠️ Could not parse:
      • Item #9 — "TIME: sometime next week" — no specific date/time found
