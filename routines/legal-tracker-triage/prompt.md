@@ -1,4 +1,4 @@
-# Legal Tracker — Nightly Case Activity Triage
+# Legal Tracker — Weekly Case Activity Triage
 
 You are executing the Legal Tracker Triage routine right now. Complete every step below in order. Do not stop to verify configuration or ask for confirmation — just do the work.
 
@@ -38,7 +38,7 @@ Use the skill's `airtable_query` tool for reads, `airtable_create_record` for wr
 
 ## Step 1: Determine the review window
 
-End: now. Start: 48 hours before, except if today (America/New_York) is Monday, go back to the preceding Friday to cover the weekend. The wider-than-24h default is a deliberate safety margin against a prior run failing outright — the "already logged" dedup check in Step 3/4 makes re-scanning overlapping time safe, so this costs extra search time, not correctness.
+End: now. Start: 14 days before now. This routine runs weekly (Fridays), so a 14-day window is double the 7-day gap between runs — the same doubling-for-safety-margin logic the old daily version used (48 hours for a 24-hour cadence), scaled to the new cadence. The margin exists against a single missed or failed run; the "already logged" dedup check in Step 3/4 makes re-scanning overlapping time safe, so the extra width costs search time, not correctness.
 
 ## Step 2: Load matching context
 
@@ -53,7 +53,7 @@ Use the Gmail MCP tools (`search_threads`, `get_thread`) for messages in the rev
 
 For each thread with activity in the window:
 1. If its thread ID is already in the Thread Matches map, use that cached Case(s) — skip re-matching.
-2. Otherwise, match using (a) sender/recipient email vs. Opposing Counsel's Primary Contact Email, (b) Matter/claimant name in subject or body, (c) case number/docket reference, (d) the thread carries the Gmail label `!update` — this label is a human-applied signal meaning "this thread is case-related and must be logged," it does not by itself tell you which case. Link multiple cases if genuinely ambiguous (e.g. a joint mediation update) rather than guessing one.
+2. Otherwise, match using (a) sender/recipient email vs. Opposing Counsel's Primary Contact Email, (b) Matter/claimant name in subject or body, (c) case number/docket reference, (d) the thread carries the Gmail label `!update` — this label is a human-applied signal meaning "this thread is case-related and must be logged," it does not by itself tell you which case. Link multiple cases if genuinely ambiguous (e.g. a joint mediation update) rather than guessing one — but only ever link real record IDs from the Cases map built in Step 2, never a matter name you're inferring or guessing at.
 3. If none of (a)–(d) fire, skip it — don't create a row. If there are more than a couple of these, mention the count in the Slack summary. EXCEPTION: if the thread carries the `!update` label but (a)–(c) don't identify a specific case, do NOT skip it — create the row anyway with Case left blank, Match Confidence "No Confidence", Entry Type "Email", and a note in the Entry text that it needs manual case assignment. Call these out explicitly (by subject line) in the Slack summary so Chris can assign them by hand.
 
 Skip a thread already in the "already logged" set from Step 2 UNLESS it has a new message dated after the most recent existing entry for that thread — in that case, write a new row summarizing only the new development.
@@ -65,12 +65,12 @@ Use `slack_search_public_and_private` (and `slack_read_thread` as needed) for me
 ## Step 5: Write draft entries
 
 For each matched, non-duplicate item, POST a new row to Update Matches:
-- **Case:** matched case record(s), or blank per the `!update` exception above
+- **Case:** only set for a Medium Confidence match — the matched case's real record ID (or record IDs, if genuinely ambiguous between multiple candidates — see Match Confidence below). Leave this field empty for a Low Confidence or fully-unmatched item; never populate it with a matter name or any string that isn't an existing record ID you already have from the Cases map built in Step 2 — Airtable will silently create a brand-new, spurious Case record from any string it doesn't recognize as a record ID, which is worse than leaving the field blank.
 - **Activity Date:** date of the email/message
-- **Entry:** concise, factual, third-person summary (e.g. "Counsel confirmed X") — no speculation, no legal advice
+- **Entry:** concise, factual, third-person summary (e.g. "Counsel confirmed X") — no speculation, no legal advice. When Case is left blank (Low or No Confidence), name the likely matter or claimant in the Entry text itself so Chris can assign it by hand.
 - **Entry Type:** "Email" or "Slack" depending on source
 - **Email Link:** Gmail permalink (`https://mail.google.com/mail/u/0/#all/<threadId>`) or Slack permalink
-- **Match Confidence:** "Medium Confidence" for a strong single-case match (opposing counsel email, or explicit name/number), "Low Confidence" for a weaker single-case match, "No Confidence" if multiple candidate cases are linked or no case could be identified
+- **Match Confidence:** "Medium Confidence" for a strong single-case match (opposing counsel email, or explicit name/number) — link that Case. "Low Confidence" for a weaker single-case match — leave Case blank rather than linking a guess. "No Confidence" if multiple candidate cases are genuinely plausible (link all of them — these are real record IDs, not a guess) or if no case could be identified at all (leave Case blank).
 - **Thread ID:** the Gmail thread ID or Slack thread identifier
 - **Author:** "Chris Rider"
 
@@ -81,7 +81,7 @@ For any newly-matched thread not already in the Thread Matches cache, also POST 
 Use `slack_send_message` to post to channel `C0BGFU05MRU` (#tracker-updates). Do NOT create a Gmail draft — Slack is the only summary output.
 
 Message (Slack markdown, under 200 words):
-- Bold header line: `*Nightly Case Activity Triage — {date}*`
+- Bold header line: `*Weekly Case Activity Triage — {date}*`
 - Number of new draft entries added, grouped by matter
 - One line per entry
 - Count of anything reviewed but not matched (only if notable)
@@ -93,6 +93,7 @@ Message (Slack markdown, under 200 words):
 - Write only to Update Matches and Thread Matches. Never write to Case Activity. Author is always "Chris Rider"; never set Approved or Promoted.
 - Never modify existing rows anywhere — only add new ones.
 - Only match against Active cases, unless a Closed case's thread is already cached in Thread Matches.
+- Never write a matter name (or any guessed text) into the Case link field. Only ever link real record IDs pulled from the Cases map in Step 2. If you're not confident enough in an existing record ID to call it Medium Confidence, leave Case empty — don't type in a name. A plain string in a linked-record field gets silently typecast by Airtable into a brand-new Case record, which pollutes the Cases table far worse than a blank field would.
 - When in doubt, don't create a row — missed items are cheaper than noise in Chris's review queue. EXCEPTION: a Gmail thread carrying the `!update` label must always get a row, even if no case can be identified — see Step 3.
 - US data only — never use any tool or table with `_uk_` or `_eu_` in the name.
 - Never send a Gmail draft or email as the summary output — Slack (#tracker-updates) is the only reporting channel.
