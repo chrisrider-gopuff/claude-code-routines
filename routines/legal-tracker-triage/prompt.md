@@ -1,4 +1,4 @@
-# Legal Tracker — Nightly Case Activity Triage
+# Legal Tracker — Weekly Case Activity Triage
 
 You are executing the Legal Tracker Triage routine right now. Complete every step below in order. Do not stop to verify configuration or ask for confirmation — just do the work.
 
@@ -38,7 +38,7 @@ Use the skill's `airtable_query` tool for reads, `airtable_create_record` for wr
 
 ## Step 1: Determine the review window
 
-End: now. Start: 48 hours before, except if today (America/New_York) is Monday, go back to the preceding Friday to cover the weekend. The wider-than-24h default is a deliberate safety margin against a prior run failing outright — the "already logged" dedup check in Step 3/4 makes re-scanning overlapping time safe, so this costs extra search time, not correctness.
+End: now. Start: 14 days before now. This routine runs weekly (Fridays), so a 14-day window is double the 7-day gap between runs — the same doubling-for-safety-margin logic the old daily version used (48 hours for a 24-hour cadence), scaled to the new cadence. The margin exists against a single missed or failed run; the "already logged" dedup check in Step 3/4 makes re-scanning overlapping time safe, so the extra width costs search time, not correctness.
 
 ## Step 2: Load matching context
 
@@ -81,7 +81,7 @@ For any newly-matched thread not already in the Thread Matches cache, also POST 
 Use `slack_send_message` to post to channel `C0BGFU05MRU` (#tracker-updates). Do NOT create a Gmail draft — Slack is the only summary output.
 
 Message (Slack markdown, under 200 words):
-- Bold header line: `*Nightly Case Activity Triage — {date}*`
+- Bold header line: `*Weekly Case Activity Triage — {date}*`
 - Number of new draft entries added, grouped by matter
 - One line per entry
 - Count of anything reviewed but not matched (only if notable)
