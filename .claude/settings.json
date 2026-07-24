@@ -12,6 +12,7 @@
       "mcp__Gmail__unlabel_message",
       "mcp__Gmail__unlabel_thread",
       "mcp__Gmail__list_drafts",
+      "mcp__Gmail__create_draft",
       "mcp__Slack__slack_search_public_and_private",
       "mcp__Slack__slack_search_public",
       "mcp__Slack__slack_read_channel",
@@ -34,7 +35,11 @@
       "mcp__Google_Calendar__respond_to_event",
       "mcp__Google_Calendar__suggest_time",
       "mcp__Google_Drive__read_file_content",
-      "mcp__Google_Drive__search_files"
+      "mcp__Google_Drive__search_files",
+      "mcp__github__get_file_contents",
+      "mcp__github__create_branch",
+      "mcp__github__create_or_update_file",
+      "mcp__github__create_pull_request"
     ]
   }
 }
