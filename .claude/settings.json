@@ -25,14 +25,16 @@
       "mcp__Slack__slack_create_canvas",
       "mcp__Slack__slack_read_canvas",
       "mcp__Slack__slack_update_canvas",
-      "mcp__Google-Calendar__create_event",
-      "mcp__Google-Calendar__get_event",
-      "mcp__Google-Calendar__list_events",
-      "mcp__Google-Calendar__update_event",
-      "mcp__Google-Calendar__delete_event",
-      "mcp__Google-Calendar__list_calendars",
-      "mcp__Google-Calendar__respond_to_event",
-      "mcp__Google-Calendar__suggest_time"
+      "mcp__Google_Calendar__create_event",
+      "mcp__Google_Calendar__get_event",
+      "mcp__Google_Calendar__list_events",
+      "mcp__Google_Calendar__update_event",
+      "mcp__Google_Calendar__delete_event",
+      "mcp__Google_Calendar__list_calendars",
+      "mcp__Google_Calendar__respond_to_event",
+      "mcp__Google_Calendar__suggest_time",
+      "mcp__Google_Drive__read_file_content",
+      "mcp__Google_Drive__search_files"
     ]
   }
 }
