@@ -70,8 +70,8 @@ table.
 
 This is the actual `AIRTABLE_MCP_CONFIG` value used by the first deployment
 of this server, proxying the Legal Tracker base (`appFIB9fJCzTeFDcG`) for
-`legal-tracker-triage`, `legal-tracker-triage-review`, and
-`nat-1-1-briefing`. Since this now lives in Script Properties rather than
+`legal-tracker-triage`, `legal-tracker-triage-review`, `nat-1-1-briefing`,
+and `daily-brief`. Since this now lives in Script Properties rather than
 in code, this is the checked-in record of what it should be set to — update
 this block if that deployment's config ever changes, so it doesn't only
 exist as tribal knowledge in one Apps Script project's settings.
@@ -93,6 +93,11 @@ MCP-server section (which describes this Legal Tracker deployment
 specifically) and in each routine's `prompt.md` — this file only needs to
 be the source of truth for the config's actual current value.
 
+`legal-tracker-triage`, `legal-tracker-triage-review`, and
+`nat-1-1-briefing` use the `unsupervised` token. `daily-brief` uses the
+`supervised` token instead, since its Step 2 needs `Cases`/`Case Activity`
+write access that `unsupervised` doesn't have on this deployment.
+
 `AIRTABLE_BASE_ID` for this deployment is `appFIB9fJCzTeFDcG`.
 
 `AIRTABLE_MCP_URL` for this deployment:
@@ -107,17 +112,19 @@ deployment is ever retired and replaced with a brand-new one (not just a
 new version of the existing one — Apps Script keeps the same URL across
 version pushes), update this line and the Secrets Sheet row together.
 
-**How `legal-tracker-triage`, `legal-tracker-triage-review`, and
-`nat-1-1-briefing` get `AIRTABLE_MCP_URL` and the `unsupervised` token:**
-neither is a plain environment variable — they look up both at the start
-of each run from a private, single-owner ("Secrets Sheet") Google Sheet
-(spreadsheet ID `1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned
-solely by `chris.rider@gopuff.com`, no other collaborators) that also
-holds several unrelated secrets for other systems (the Airtable API key
-itself, BrightFlag credentials, a routines API token), using the Google
-Drive MCP's `read_file_content` on that file ID. The sheet needs two rows
-for this deployment: `AIRTABLE_MCP_URL` (value above) and
-`AIRTABLE_MCP_TOKEN_UNSUPERVISED`.
+**How `legal-tracker-triage`, `legal-tracker-triage-review`,
+`nat-1-1-briefing`, and `daily-brief` get `AIRTABLE_MCP_URL` and their
+tier's token:** none of these is a plain environment variable — each
+routine looks both up at the start of its run from a private,
+single-owner ("Secrets Sheet") Google Sheet (spreadsheet ID
+`1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned solely by
+`chris.rider@gopuff.com`, no other collaborators) that also holds several
+unrelated secrets for other systems (the Airtable API key itself,
+BrightFlag credentials, a routines API token), using the Google Drive
+MCP's `read_file_content` on that file ID. The sheet needs three rows for
+this deployment: `AIRTABLE_MCP_URL` (value above),
+`AIRTABLE_MCP_TOKEN_UNSUPERVISED` (used by the first three routines), and
+`AIRTABLE_MCP_TOKEN_SUPERVISED` (used by `daily-brief` only).
 
 This is a **whole-file read, not a scoped one** — there's no Google Sheets
 MCP connector or range-scoped read tool available in this environment.
@@ -129,10 +136,12 @@ single-cell/range reads, but it's not an MCP connector: it shells out to
 PowerShell via Desktop Commander on Chris's local desktop and reads its own
 auth passphrase from a local file path, so it's unreachable from a cloud
 routine. Given that, each routine's `prompt.md` is explicit that even
-though the read returns everything in the sheet, only the two rows labeled
-`AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN_UNSUPERVISED` may ever be used,
-echoed, or referenced — never any other row or the sheet's contents in
-general. That's enforced by prompt discipline, not by the read itself,
+though the read returns everything in the sheet, only `AIRTABLE_MCP_URL`
+and its own tier's token row (`AIRTABLE_MCP_TOKEN_UNSUPERVISED` for the
+first three routines, `AIRTABLE_MCP_TOKEN_SUPERVISED` for `daily-brief`)
+may ever be used, echoed, or referenced — never any other row or the
+sheet's contents in general. That's enforced by prompt discipline, not by
+the read itself,
 which is a real trade-off worth knowing rather than glossing over: a
 routine that mishandled this (or was successfully prompt-injected into
 ignoring the instruction) would have every other secret in the vault

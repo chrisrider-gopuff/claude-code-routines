@@ -24,12 +24,15 @@ Items that appear in multiple sources are consolidated into a single entry with 
 
 **Snoozing and extending items:** Replying "resurface Friday" (or "in N days", a specific date, etc.) to a numbered item holds it off the brief until that date instead of showing it every morning. Items sourced from Gmail/Slack that are about to age out of the 7-day sweep window get flagged with a ⏳ note in the brief; replying "continue for 2 weeks" (or any duration) keeps that item visible past its natural drop-off point. Because each run only reads yesterday's thread reply, both a multi-day hold and an extension have to be persisted somewhere the routine will still see days later — tracked in `routines/daily-brief/state.json`, which (unlike other routines' state files) is checked into this repo rather than created at runtime, so it survives across an ephemeral environment and stays reviewable in git history. The routine reads it each morning for items due or expiring, and commits it back after any change.
 
+**Airtable access:** Goes through the `airtable-mcp` skill/server (see "MCP servers" and "Skills" below), talking to the Legal Tracker deployment — never holds `AIRTABLE_API_KEY` directly. Unlike the other three callers, uses the **`supervised`** tier token, because Step 2's ALL-CAPS keyword handling needs to write to `Cases` and `Case Activity`, which only `supervised` can touch. This is safe despite the routine running unattended: every write is gated behind parsing Chris's own numbered Slack reply, never behind raw swept Gmail/Slack content, so it doesn't carry the injection risk the tier split exists to contain — see `prompt.md` Step 2 for the full rationale.
+
 **Required MCP integrations:**
 - Google Calendar (list today's events)
 - Gmail (read threads, search)
 - Slack (search public and private channels, DMs, group DMs; send DMs)
+- Google Drive (`search_files`/`list_recent_files`, to check for completion evidence on self-authored action items; `read_file_content` on the Secrets Sheet for the Airtable deployment URL/token — see "Airtable access" above)
 
-**Required environment:** `SHARED_SECRET` — same value as `weekly-accomplishments`, set on the environment this routine runs from, matching the Script Property configured in the Daily Tasks bridge Apps Script deployment. Used by Phase 2 (see `prompt.md`) to authenticate Task-creation calls.
+**Required environment:** `SHARED_SECRET` — same value as `weekly-accomplishments`, set on the environment this routine runs from, matching the Script Property configured in the Daily Tasks bridge Apps Script deployment. Used by Phase 2 (see `prompt.md`) to authenticate Task-creation calls. `AIRTABLE_MCP_URL` and the `supervised` tier token are looked up at the start of each run from the private Secrets Sheet, not held as environment variables (see "Airtable access" above).
 
 **Filtering rules enforced:**
 - Excludes direct Yardstik support emails (`support@yardstik.com`)
@@ -175,29 +178,33 @@ table/field before trusting a hardcoded name.
 
 The first (and currently only) deployment of this server proxies the Legal
 Tracker base (`appFIB9fJCzTeFDcG`) for `legal-tracker-triage`,
-`legal-tracker-triage-review`, and `nat-1-1-briefing` — all three go
-through it (via the `airtable-mcp` skill below) instead of holding
+`legal-tracker-triage-review`, `nat-1-1-briefing`, and `daily-brief` — all
+four go through it (via the `airtable-mcp` skill below) instead of holding
 `AIRTABLE_API_KEY` directly. Its config specifically: `unsupervised` can
 write `Update Matches`/`Thread Matches`, `supervised` adds `Case
 Activity`/`Cases`, and `deleteTables` is `Update Matches` only — rationale
-in each routine's `prompt.md`. See `mcp-servers/airtable-mcp/README.md` for
-that deployment's actual `AIRTABLE_MCP_CONFIG` value (the checked-in source
-of truth, since it now lives in Script Properties rather than code), plus
-deployment and testing steps for standing up a new deployment against a
-different base.
+in each routine's `prompt.md`. Three of the four (`legal-tracker-triage`,
+`legal-tracker-triage-review`, `nat-1-1-briefing`) use the `unsupervised`
+token; `daily-brief` is the one exception, using `supervised` because it
+needs `Cases`/`Case Activity` write access — see its `prompt.md` Step 2 for
+why that's still safe for an unattended routine. See
+`mcp-servers/airtable-mcp/README.md` for that deployment's actual
+`AIRTABLE_MCP_CONFIG` value (the checked-in source of truth, since it now
+lives in Script Properties rather than code), plus deployment and testing
+steps for standing up a new deployment against a different base.
 
-None of the three callers hold `AIRTABLE_MCP_URL` or the `unsupervised`
-token as plain environment variables — each looks up both, at the start of
-its run, from a private, single-owner Secrets Sheet (Google Sheet, owned
-solely by Chris) that also holds unrelated secrets for other systems, via
-the Google Drive MCP's `read_file_content`. `AIRTABLE_MCP_URL` isn't
-sensitive the way the token is — it moved into the sheet for operational
-reasons, not secrecy: every caller already pays for a whole-file read to
-get the token, so having it also read one more row costs nothing extra,
-and it replaces three independent per-environment copies with a single
-value that's edited in one place. See `mcp-servers/airtable-mcp/README.md`
-for the current value of that row (the checked-in record of what it should
-be, since the sheet itself isn't).
+None of the four callers hold `AIRTABLE_MCP_URL` or their tier's token as
+plain environment variables — each looks up both, at the start of its run,
+from a private, single-owner Secrets Sheet (Google Sheet, owned solely by
+Chris) that also holds unrelated secrets for other systems, via the Google
+Drive MCP's `read_file_content`. `AIRTABLE_MCP_URL` isn't sensitive the way
+the token is — it moved into the sheet for operational reasons, not
+secrecy: every caller already pays for a whole-file read to get the token,
+so having it also read one more row costs nothing extra, and it replaces
+independent per-environment copies with a single value that's edited in
+one place. See `mcp-servers/airtable-mcp/README.md` for the current value
+of that row (the checked-in record of what it should be, since the sheet
+itself isn't).
 
 That read is a whole-file read, not a scoped one — there's no Google
 Sheets MCP connector or range-scoped read tool available in this
@@ -205,8 +212,10 @@ environment (confirmed: only Google Drive is connected, and its tools
 read/download entire files; the `google-sheets` skill that does support
 ranges only works from Chris's local desktop via Desktop
 Commander/PowerShell, unreachable from a cloud routine). Each prompt is
-explicit that only the two named rows' values (`AIRTABLE_MCP_URL` and
-`AIRTABLE_MCP_TOKEN_UNSUPERVISED`) may ever be used, echoed, or
+explicit that only the two named rows' values (`AIRTABLE_MCP_URL` and its
+own tier's token row — `AIRTABLE_MCP_TOKEN_UNSUPERVISED` for three
+callers, `AIRTABLE_MCP_TOKEN_SUPERVISED` for `daily-brief`) may ever be
+used, echoed, or
 referenced — never any other row or the sheet's contents in general — but
 this is a prompt-level discipline, not a technical restriction the read
 itself enforces. See `mcp-servers/airtable-mcp/README.md` for the sheet ID
