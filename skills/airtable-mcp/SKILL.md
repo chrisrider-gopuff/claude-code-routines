@@ -118,24 +118,32 @@ server-side, and for how to stand up a new deployment for a different base.
 ## Known deployments
 
 - **Legal Tracker** (`appFIB9fJCzTeFDcG`) — used by `legal-tracker-triage`,
-  `legal-tracker-triage-review`, and `nat-1-1-briefing`. Tables: `Update
-  Matches`, `Case Activity`, `Thread Matches`, `Cases`, `Opposing Counsel`.
-  The actual `AIRTABLE_MCP_CONFIG` and `AIRTABLE_MCP_URL` for this
-  deployment (which tier can write/delete where, and the current
-  deployment URL to copy into each caller's environment) are documented in
-  `mcp-servers/airtable-mcp/README.md`'s "Worked example" section — that
-  file, not this one, is the source of truth for their current values.
-  **Sourcing:** none of these three callers hold `AIRTABLE_MCP_URL` or
-  `AIRTABLE_MCP_TOKEN` as plain environment variables — they look up both
-  at the start of each run from a private, single-owner Secrets Sheet via
-  the Google Drive MCP's `read_file_content` (a whole-file read — no
-  Google Sheets MCP connector or range-scoped read tool exists in this
+  `legal-tracker-triage-review`, `nat-1-1-briefing`, and `daily-brief`.
+  Tables: `Update Matches`, `Case Activity`, `Thread Matches`, `Cases`,
+  `Opposing Counsel`. The actual `AIRTABLE_MCP_CONFIG` and
+  `AIRTABLE_MCP_URL` for this deployment (which tier can write/delete
+  where, and the current deployment URL to copy into each caller's
+  environment) are documented in `mcp-servers/airtable-mcp/README.md`'s
+  "Worked example" section — that file, not this one, is the source of
+  truth for their current values.
+  **Tiers:** `legal-tracker-triage`, `legal-tracker-triage-review`, and
+  `nat-1-1-briefing` all use the `unsupervised` token. `daily-brief` is the
+  exception — it uses `supervised`, because its Step 2 needs to write to
+  `Cases`/`Case Activity`, which `unsupervised` can't touch on this
+  deployment. See `daily-brief`'s `prompt.md` Step 2 for why that's still
+  safe for a routine that runs unattended.
+  **Sourcing:** none of these four callers hold `AIRTABLE_MCP_URL` or
+  their tier's token as plain environment variables — they look up both at
+  the start of each run from a private, single-owner Secrets Sheet via the
+  Google Drive MCP's `read_file_content` (a whole-file read — no Google
+  Sheets MCP connector or range-scoped read tool exists in this
   environment). The sheet also holds unrelated secrets for other systems;
-  each routine's prompt is explicit that only the rows named
-  `AIRTABLE_MCP_URL` and `AIRTABLE_MCP_TOKEN_UNSUPERVISED` may ever be used
-  or referenced, though that's prompt-level discipline, not something the
-  read itself restricts. See `mcp-servers/airtable-mcp/README.md` and each
-  routine's `prompt.md` for the exact steps.
+  each routine's prompt is explicit that only `AIRTABLE_MCP_URL` and its
+  own tier's token row (`AIRTABLE_MCP_TOKEN_UNSUPERVISED` for three
+  callers, `AIRTABLE_MCP_TOKEN_SUPERVISED` for `daily-brief`) may ever be
+  used or referenced, though that's prompt-level discipline, not something
+  the read itself restricts. See `mcp-servers/airtable-mcp/README.md` and
+  each routine's `prompt.md` for the exact steps.
 
 Add an entry here whenever a new base gets its own deployment, so a caller
 can find the right one without reading every routine's prompt.md.

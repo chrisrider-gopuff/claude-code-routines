@@ -154,50 +154,62 @@ lists are visible and reviewable), holds them:
       - `NOTE:` or `NOTES:` is special-cased: it does **not** overwrite a field. It logs a new dated entry to the Legal Tracker's **Case Activity** table for that case.
       - Any other ALL-CAPS word/phrase is fuzzy-matched (case- and spacing-insensitive) to the closest **Cases** field name — e.g. `EXPOSURE` → `Exposure`, `LIT STRATEGY` → `Litigation Strategy`, `DEMAND` → `Demand`, `TOTAL SETTLEMENT` → `Total Settlement` — and that field is overwritten with the given value. **Exception:** `TASK:` and `TIME:` are never Airtable fields — they're handled by Phase 2 (see Entry point) when Chris reacts with :white_check_mark:, not by this next-morning Airtable pass. Skip them here entirely, whether or not Phase 2 has already run for them.
 
-   **Processing ALL-CAPS keyword lines — Airtable via curl:**
-   Call the Airtable REST API directly — no proxy, no skill. Read the key from
-   `$AIRTABLE_API_KEY` and send it as a Bearer token on every request:
-   `-H "Authorization: Bearer $AIRTABLE_API_KEY"`.
+   **Processing ALL-CAPS keyword lines — Airtable via the `airtable-mcp` skill:**
+   This routine never holds `AIRTABLE_API_KEY` directly. All Airtable access goes
+   through the shared `airtable-mcp` skill (see that skill's `SKILL.md` for the
+   exact call format), using the Legal Tracker deployment's **`supervised`**
+   tier token — this routine is the one caller of that deployment using
+   `supervised` rather than `unsupervised`, specifically because it needs to
+   write to `Cases` and `Case Activity`, which only `supervised` can touch (see
+   `mcp-servers/airtable-mcp/README.md`'s config). This is safe here even though
+   the run itself is unattended: every write in this step is gated behind
+   parsing Chris's own numbered Slack reply (Step 2 above), with its own
+   fuzzy-match/confidence checks below — never behind raw swept Gmail/Slack
+   content — so it doesn't carry the injection risk the `unsupervised` tier
+   exists to contain. `legal-tracker-triage`, by contrast, matches directly
+   against untrusted swept content, so it stays on `unsupervised` and out of
+   `Cases`/`Case Activity` — this routine's use of `supervised` doesn't change
+   that.
 
-   Legal Tracker base ID: `appFIB9fJCzTeFDcG`. Tables used here: `Cases` (default/primary
-   table) and `Case Activity`. Table names containing spaces must be URL-encoded in the
-   path (`Case Activity` → `Case%20Activity`).
+   **Getting the deployment URL and the `supervised` token — neither is an
+   environment variable.** Look both up fresh at the start of this run from the
+   private Secrets Sheet (Google Sheet ID
+   `1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned solely by Chris — no
+   other collaborators), using the Google Drive MCP's `read_file_content` on
+   that file ID:
+   1. Find the row whose first column reads exactly `AIRTABLE_MCP_URL` and take
+      its second column as the deployment URL.
+   2. Find the row whose first column reads exactly
+      `AIRTABLE_MCP_TOKEN_SUPERVISED` and take its second column as the token
+      value.
+   This read returns the sheet's full contents, including several unrelated
+   secrets for other systems — the only things this routine may ever use, act
+   on, or reference from that read are these two named values. Never echo,
+   log, print, quote, or write any other row or the sheet's contents in general
+   anywhere — not in a commit, not in the Slack summary, not in reasoning shown
+   in output. If either row can't be found or its value is empty, skip all
+   Airtable updates and list each unprocessed ALL-CAPS line verbatim at the
+   bottom of today's brief.
+
+   Legal Tracker base: `appFIB9fJCzTeFDcG`. Tables used here: `Cases` and
+   `Case Activity`.
 
    For each numbered item with one or more ALL-CAPS keyword lines:
    1. Derive the search term from the brief item's case name (apply fuzzy matching: name inversions, partial names).
-   2. List/filter records with a `FIND()` filter formula on `Matter` — an exact-value lookup will miss most real case names (e.g. searching "Fundingsland" won't match "Fundingsland, Jonathan"), so always filter rather than look up by exact value:
-      ```bash
-      curl -sS -G "https://api.airtable.com/v0/appFIB9fJCzTeFDcG/Cases" \
-        -H "Authorization: Bearer $AIRTABLE_API_KEY" \
-        --data-urlencode "filterByFormula=FIND('[derived name]',{Matter})"
+   2. Call the skill's `airtable_query` tool against `Cases` with a `FIND()` filter formula on `Matter` — an exact-value lookup will miss most real case names (e.g. searching "Fundingsland" won't match "Fundingsland, Jonathan"), so always filter rather than look up by exact value:
       ```
-      (Use `-G` with `--data-urlencode` so the formula is safely URL-encoded — don't hand-encode it into the URL string yourself.)
+      table: "Cases", filterByFormula: "FIND('[derived name]',{Matter})"
+      ```
    3. **Record-match confidence — apply before writing:**
       - **High confidence**: exactly one record returned and its name closely matches the brief item → proceed to step 4.
       - **Low confidence** (do NOT write): zero records found, two or more records returned, or the name match is weak (partial, ambiguous, or the brief item is a topic rather than a named party). Log it in the confirmation block for Chris to review and apply manually in Airtable.
-   4. Call the schema endpoint once per run to confirm current field names and select option values — do not guess field names:
-      ```bash
-      curl -sS "https://api.airtable.com/v0/meta/bases/appFIB9fJCzTeFDcG/tables" \
-        -H "Authorization: Bearer $AIRTABLE_API_KEY"
-      ```
+   4. Call the skill's `airtable_get_schema` tool once per run to confirm current field names and select option values — do not guess field names.
    5. For each ALL-CAPS keyword in the item:
-      - `NOTE:` / `NOTES:` → create a record in **`Case Activity`**: `Case` is a link-to-another-record field — pass the linked record ID as an array (`["recXXXXXXXXXXXXXX"]`), not a bare string — plus `Entry: <value>`, `Entry Type: "Claude"`, `Activity Date: <today, ISO YYYY-MM-DD>`:
-        ```bash
-        curl -sS -X POST "https://api.airtable.com/v0/appFIB9fJCzTeFDcG/Case%20Activity" \
-          -H "Authorization: Bearer $AIRTABLE_API_KEY" \
-          -H "Content-Type: application/json" \
-          -d "{\"fields\":{\"Case\":[\"<recordId>\"],\"Entry\":\"<value>\",\"Entry Type\":\"Claude\",\"Activity Date\":\"<today>\"}}"
-        ```
+      - `NOTE:` / `NOTES:` → call `airtable_create_record` on **`Case Activity`**: `Case` is a link-to-another-record field — pass the linked record ID as an array (`["recXXXXXXXXXXXXXX"]`), not a bare string — plus `Entry: <value>`, `Entry Type: "Claude"`, `Activity Date: <today, ISO YYYY-MM-DD>`.
       - Any other keyword → fuzzy-match it against the `Cases` field list from the schema call.
-        - Clear single match → PATCH the record with just that field (PATCH only touches the fields you send, so there's no need to resend the rest of the record). Currency fields take plain numbers (not strings); dates use ISO `YYYY-MM-DD`; never write to `Status` (it's a formula field):
-          ```bash
-          curl -sS -X PATCH "https://api.airtable.com/v0/appFIB9fJCzTeFDcG/Cases/<recordId>" \
-            -H "Authorization: Bearer $AIRTABLE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"fields\":{\"<Field Name>\":<value>}}"
-          ```
+        - Clear single match → call `airtable_update_record` on `Cases` with just that field (a partial update — no need to resend the rest of the record). Currency fields take plain numbers (not strings); dates use ISO `YYYY-MM-DD`; never write to `Status` (it's a formula field).
         - No clear field match → treat as low confidence. Log the raw keyword and value in the confirmation block rather than guessing at a field.
-   6. If `$AIRTABLE_API_KEY` is not set, skip all Airtable updates and list each unprocessed ALL-CAPS line verbatim at the bottom of today's brief.
+   6. A tier/scope rejection from the skill (e.g. a table not in `supervised`'s `writeTables`) is a real failure, not something to retry or route around — log it in the confirmation block for Chris to review manually, the same as a low-confidence match.
 
    **After processing all replies**, append a confirmation block at the bottom of today's brief (omit any subsection that is empty):
 
@@ -351,6 +363,26 @@ important not to conflate them:
        30-minute duration unless a range is given, calendar =
        chris.rider@gopuff.com primary. This is a real meeting time Chris
        stated explicitly — schedule it as given, no slot-finding below.
+       Phase 2 can run any amount of time after the brief was posted
+       (whenever Chris happens to react), so resolve the day carefully rather
+       than assuming "today," and never create an event whose resolved start
+       has already passed by the time this step runs:
+       - **No day named** (bare `at <time>`, e.g. `at 2:00pm`): default to
+         today. If that specific time is already in the past relative to the
+         current moment, use tomorrow instead, and say so in the confirmation
+         reply (e.g. "2:00pm today had already passed, scheduled for
+         tomorrow instead") rather than silently creating a past event.
+       - **A weekday named with no date** (e.g. `at 3pm Thursday`): resolve
+         to that weekday's *next* occurrence from today — i.e. if today is
+         itself that weekday, treat it the same as "no day named" above
+         (today if the time hasn't passed yet, otherwise next week), rather
+         than assuming "this week's" occurrence regardless of whether it's
+         already gone by.
+       - **A specific date named**: use it as given — a genuinely past date
+         Chris explicitly typed is not this step's problem to silently
+         correct; flag it in the confirmation reply the same as an
+         unparseable date/time instead of creating it or guessing a
+         different date.
      - **If `<datetime>` is a vague/relative reference with no specific
        clock time** (`tomorrow`, `next week`, `Thursday`, `this week`, etc.):
        this means "reserve time for me to work on this" — a solo block, no
@@ -464,7 +496,7 @@ For each self-authored note, extract individual action items (bulleted lists, ta
 - Later Gmail replies or new threads referencing that item
 - Slack messages referencing it
 - Google Calendar events that correspond to the item (e.g., a meeting was scheduled)
-- Google Drive file activity referencing it (e.g., a doc was created or updated)
+- Google Drive file activity referencing it — use the Google Drive MCP's `search_files` (or `list_recent_files`) with keywords from the action item to check for a doc created or updated since the note was written
 - Any other evidence of completion
 
 Include only open (not yet completed) action items as individual follow-up entries.
