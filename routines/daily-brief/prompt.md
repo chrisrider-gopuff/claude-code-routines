@@ -351,13 +351,19 @@ important not to conflate them:
        different angle) — fold it in; don't discard the entry and use only
        his words as the title. If he wrote nothing else, the title is built
        purely from the entry.
-     - **Description** (the event's `description` field): always include the
+     - **Description** (the event's `description` field): Include the complete
+       brief entry text (the bold title plus the full summary), followed by the
        entry's underlying source link(s) — the same Gmail/Slack/Calendar
        link(s) shown under that numbered item in the brief — one per line,
        plus `From Daily Brief item #<n>`. If the entry was consolidated from
        multiple sources, include every source link. If the entry genuinely has
        no source link, write `(source not found)` rather than omitting the
-       description.
+       description. Example:
+       ```
+       Calvin Overstreet — Settlement Demand & Mediation (New) — Eli Hassinger (MDWCG) sent claimant's counsel settlement demand 7/28 morning; will send settlement recs this week — need to review demand and coordinate strategy.
+       https://mail.google.com/mail/u/0/#inbox/...
+       From Daily Brief item #8
+       ```
      - **If `<datetime>` names a specific time** (e.g. `at 3pm Thursday`, `at
        2:00pm`): resolve it to a start time (America/New_York), default to a
        30-minute duration unless a range is given, calendar =
@@ -420,6 +426,21 @@ important not to conflate them:
    - An item can have both a `TASK:` and a `TIME:` line — create both.
    - If a line's date/time genuinely can't be parsed, don't guess — skip creating
      anything for that line and flag it in the confirmation reply instead.
+
+   **Slot-finding and validation for vague time references (no specific clock time):**
+   Before creating any calendar event for a vague reference, follow this process:
+   1. **Identify the target day(s)**: Resolve the day as per the rules above (today, tomorrow, next Thursday, etc.).
+   2. **Pull the calendar**: Call `list_events` to get all events on the target day(s).
+   3. **Identify candidate slots**: Within the candidate windows (9:30 AM–12:00 PM or 1:00 PM–5:00 PM ET), list all gaps large enough to fit the requested duration.
+   4. **Choose the best slot**: Pick the gap with the most breathing room on both sides (least-crowded stretch). If multiple days are being considered, rank by total open time and pick the earliest weekday.
+   5. **Validate the chosen time**:
+      - Verify the start time falls within 9:30 AM–12:00 PM OR 1:00 PM–5:00 PM ET
+      - Verify the end time also falls within one of those windows (never span lunch or after-hours)
+      - Verify it's Monday–Friday
+      - If any validation fails, do NOT create the event — instead, flag it as unable to schedule in the confirmation reply.
+   6. **If no day has available slots**: Do not default to evening hours or force the event outside candidate windows. Flag it explicitly as unable to schedule and note why (e.g., "no open slot found in candidate windows across all weekdays").
+   7. **If today has no space but future days do**: Move the item to the next available day and note this in the confirmation reply (e.g., "scheduled for Wed instead of today — no available slot today").
+
 4. Always post a **threaded reply under the reacted-to reply** from Step 2
    (Chris's own numbered message — use its real ts, corrected in Step 2 if the
    original was imprecise), not under the brief itself and not as a new
