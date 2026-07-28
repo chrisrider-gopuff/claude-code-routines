@@ -487,6 +487,8 @@ Search Gmail for threads from the last 7 days. Focus on:
 - Threads where I am in the To/CC field and the last message is NOT from me
 - Threads where I sent a message and asked a question or requested action, but no reply has come yet for more than 24 hours
 
+**Before including any Section A item, confirm the thread is actually still open.** `search_threads` only reflects the message(s) that matched the search query — if that query is oriented around mail sent *to* me (e.g. `to:me`), a reply I sent afterward won't match it and may not appear in that thread's returned messages at all, even though it's the true latest message. Don't judge "last message is NOT from me" off the search result alone. For each candidate thread, call `get_thread` to pull the full message list, and check the actual most recent message's sender and timestamp. If I've already replied — regardless of whether the other party has responded since — drop the item; it's handled, not pending.
+
 **B. Self-authored notes-to-self**
 Search for:
 - `from:me to:me` (sent-to-self emails)
@@ -518,6 +520,8 @@ Focus on:
 - Group DMs where someone is waiting on me
 - Channel messages where I am @mentioned and have not responded
 - Threads I am in where someone tagged me or my response is clearly pending
+
+**Before including any item above, confirm the thread is actually still open.** A Slack search result reflects the message that matched the search — not necessarily the thread's true latest message. A reply I sent afterward may not surface in the same search hit. For each candidate DM/thread, call `slack_read_thread` to pull the full message list and check who actually sent the last message. If I've already replied, drop the item — it's handled, not pending.
 
 For each item, note the channel/DM, the person waiting, and what they're waiting for.
 
