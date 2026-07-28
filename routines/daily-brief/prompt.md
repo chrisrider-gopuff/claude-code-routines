@@ -351,13 +351,19 @@ important not to conflate them:
        different angle) — fold it in; don't discard the entry and use only
        his words as the title. If he wrote nothing else, the title is built
        purely from the entry.
-     - **Description** (the event's `description` field): always include the
+     - **Description** (the event's `description` field): Include the complete
+       brief entry text (the bold title plus the full summary), followed by the
        entry's underlying source link(s) — the same Gmail/Slack/Calendar
        link(s) shown under that numbered item in the brief — one per line,
        plus `From Daily Brief item #<n>`. If the entry was consolidated from
        multiple sources, include every source link. If the entry genuinely has
        no source link, write `(source not found)` rather than omitting the
-       description.
+       description. Example:
+       ```
+       Calvin Overstreet — Settlement Demand & Mediation (New) — Eli Hassinger (MDWCG) sent claimant's counsel settlement demand 7/28 morning; will send settlement recs this week — need to review demand and coordinate strategy.
+       https://mail.google.com/mail/u/0/#inbox/...
+       From Daily Brief item #8
+       ```
      - **If `<datetime>` names a specific time** (e.g. `at 3pm Thursday`, `at
        2:00pm`): resolve it to a start time (America/New_York), default to a
        30-minute duration unless a range is given, calendar =
