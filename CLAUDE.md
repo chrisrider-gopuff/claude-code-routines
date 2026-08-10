@@ -77,15 +77,15 @@ Approved rows are deleted on a different trigger: not age, but whether the row h
 
 Only once a pattern's cumulative count reaches 5 — in either direction — and it hasn't also matched a row from the opposite verdict, which would mean the pattern is too broad, does it propose a specific edit to `legal-tracker-triage/prompt.md` as a pull request, with representative examples as evidence. A rejection pattern typically proposes an exclusion rule; an approval pattern typically proposes loosening or strengthening a matching/confidence rule. It never edits that file directly and never merges its own PR; Chris reviews and merges like any other change. Rows Chris hasn't reviewed yet (blank) are never touched.
 
-**Airtable access:** Goes through the `airtable-mcp` skill/server, same as `legal-tracker-triage` — read-only plus deletes on Update Matches, never holds `AIRTABLE_API_KEY` directly. Uses the `unsupervised` tier token, not `supervised`, even though it doesn't need Case Activity/Cases write access — it also runs on a schedule with no human present and occasionally reads Gmail/Slack content for classification, so the more restrictive token is the consistent choice even though it's not strictly required for what this routine does.
+**Airtable access:** Unlike the other three callers, talks to Airtable through the connected native **Airtable** MCP connector directly, not the `airtable-mcp` Apps Script proxy/skill — read-only plus deletes on Update Matches, never holds `AIRTABLE_API_KEY` directly (the connector's own OAuth connection holds credentials instead). No Secrets Sheet lookup and no deployment URL/tier token, since the native connector doesn't use either. This also means the proxy's server-enforced tier scoping doesn't apply here — the write/delete restrictions are enforced by `prompt.md` alone, not by anything server-side. See `prompt.md`'s "Airtable access" section for the specific tool calls and the rationale for going native here instead of through the shared proxy.
 
 **Required MCP integrations:**
+- Airtable (native connector — `list_tables_for_base`, `list_records_for_table`, `delete_records_for_table`)
 - Slack (send message for summary)
 - GitHub (branch, commit, open PR)
 - Gmail/Slack read access, only if an Entry's summary text isn't enough to classify why it was rejected
-- Google Drive (`read_file_content` on the Secrets Sheet — a whole-file read, since no scoped-read tool exists for Sheets in this environment)
 
-**Required environment:** none. Same as `legal-tracker-triage`, both `AIRTABLE_MCP_URL` and the `unsupervised` tier token are looked up from the Secrets Sheet at runtime, not held as environment variables.
+**Required environment:** none.
 
 ### nat-1-1-briefing
 
@@ -178,33 +178,39 @@ table/field before trusting a hardcoded name.
 
 The first (and currently only) deployment of this server proxies the Legal
 Tracker base (`appFIB9fJCzTeFDcG`) for `legal-tracker-triage`,
-`legal-tracker-triage-review`, `nat-1-1-briefing`, and `daily-brief` — all
-four go through it (via the `airtable-mcp` skill below) instead of holding
-`AIRTABLE_API_KEY` directly. Its config specifically: `unsupervised` can
-write `Update Matches`/`Thread Matches`, `supervised` adds `Case
-Activity`/`Cases`, and `deleteTables` is `Update Matches` only — rationale
-in each routine's `prompt.md`. Three of the four (`legal-tracker-triage`,
-`legal-tracker-triage-review`, `nat-1-1-briefing`) use the `unsupervised`
-token; `daily-brief` is the one exception, using `supervised` because it
-needs `Cases`/`Case Activity` write access — see its `prompt.md` Step 2 for
-why that's still safe for an unattended routine. See
+`nat-1-1-briefing`, and `daily-brief` — these three go through it (via the
+`airtable-mcp` skill below) instead of holding `AIRTABLE_API_KEY` directly.
+`legal-tracker-triage-review` is the exception: it talks to this same base
+through the native **Airtable** MCP connector directly instead of this
+proxy — see its `prompt.md` for why (no per-caller tier scoping it needs,
+and the proxy has proven fragile as a hard dependency for a routine whose
+job is just read + delete on one table). Its config specifically:
+`unsupervised` can write `Update Matches`/`Thread Matches`, `supervised`
+adds `Case Activity`/`Cases`, and `deleteTables` is `Update Matches`
+only — rationale in each routine's `prompt.md`. Of the three proxy callers,
+`legal-tracker-triage` and `nat-1-1-briefing` use the `unsupervised` token;
+`daily-brief` is the exception, using `supervised` because it needs
+`Cases`/`Case Activity` write access — see its `prompt.md` Step 2 for why
+that's still safe for an unattended routine. See
 `mcp-servers/airtable-mcp/README.md` for that deployment's actual
 `AIRTABLE_MCP_CONFIG` value (the checked-in source of truth, since it now
 lives in Script Properties rather than code), plus deployment and testing
 steps for standing up a new deployment against a different base.
 
-None of the four callers hold `AIRTABLE_MCP_URL` or their tier's token as
-plain environment variables — each looks up both, at the start of its run,
-from a private, single-owner Secrets Sheet (Google Sheet, owned solely by
-Chris) that also holds unrelated secrets for other systems, via the Google
-Drive MCP's `read_file_content`. `AIRTABLE_MCP_URL` isn't sensitive the way
-the token is — it moved into the sheet for operational reasons, not
-secrecy: every caller already pays for a whole-file read to get the token,
-so having it also read one more row costs nothing extra, and it replaces
-independent per-environment copies with a single value that's edited in
-one place. See `mcp-servers/airtable-mcp/README.md` for the current value
-of that row (the checked-in record of what it should be, since the sheet
-itself isn't).
+None of these three callers hold `AIRTABLE_MCP_URL` or their tier's token
+as plain environment variables — each looks up both, at the start of its
+run, from a private, single-owner Secrets Sheet (Google Sheet, owned
+solely by Chris) that also holds unrelated secrets for other systems, via
+the Google Drive MCP's `read_file_content`. `AIRTABLE_MCP_URL` isn't
+sensitive the way the token is — it moved into the sheet for operational
+reasons, not secrecy: every caller already pays for a whole-file read to
+get the token, so having it also read one more row costs nothing extra,
+and it replaces independent per-environment copies with a single value
+that's edited in one place. See `mcp-servers/airtable-mcp/README.md` for
+the current value of that row (the checked-in record of what it should
+be, since the sheet itself isn't). `legal-tracker-triage-review` doesn't
+do this lookup at all — the native connector it uses has no deployment
+URL or proxy token to look up.
 
 That read is a whole-file read, not a scoped one — there's no Google
 Sheets MCP connector or range-scoped read tool available in this
@@ -213,8 +219,9 @@ read/download entire files; the `google-sheets` skill that does support
 ranges only works from Chris's local desktop via Desktop
 Commander/PowerShell, unreachable from a cloud routine). Each prompt is
 explicit that only the two named rows' values (`AIRTABLE_MCP_URL` and its
-own tier's token row — `AIRTABLE_MCP_TOKEN_UNSUPERVISED` for three
-callers, `AIRTABLE_MCP_TOKEN_SUPERVISED` for `daily-brief`) may ever be
+own tier's token row — `AIRTABLE_MCP_TOKEN_UNSUPERVISED` for
+`legal-tracker-triage` and `nat-1-1-briefing`,
+`AIRTABLE_MCP_TOKEN_SUPERVISED` for `daily-brief`) may ever be
 used, echoed, or
 referenced — never any other row or the sheet's contents in general — but
 this is a prompt-level discipline, not a technical restriction the read
