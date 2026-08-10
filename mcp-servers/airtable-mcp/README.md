@@ -66,17 +66,23 @@ table.
 4. Give each caller `<deployment URL>?token=<its tier's token>` as its
    Airtable access URL / remote MCP server URL.
 
-## Worked example: the Legal Tracker deployment
+## Worked example: the Legal Tracker deployment (currently unused)
 
-This is the actual `AIRTABLE_MCP_CONFIG` value used by the first deployment
-of this server, proxying the Legal Tracker base (`appFIB9fJCzTeFDcG`) for
-`legal-tracker-triage`, `nat-1-1-briefing`, and `daily-brief`.
-`legal-tracker-triage-review` reads/deletes from this same base but goes
-through the native Airtable MCP connector instead of this proxy — see its
-`prompt.md`. Since this now lives in Script Properties rather than
-in code, this is the checked-in record of what it should be set to — update
-this block if that deployment's config ever changes, so it doesn't only
-exist as tribal knowledge in one Apps Script project's settings.
+**No routine currently calls this deployment.** It was the first (and so
+far only) deployment of this server, proxying the Legal Tracker base
+(`appFIB9fJCzTeFDcG`) for `legal-tracker-triage`,
+`legal-tracker-triage-review`, `nat-1-1-briefing`, and `daily-brief`. All
+four have since moved to calling the connected native Airtable MCP
+connector directly instead, after this deployment's URL turned out to be
+unreachable — see each routine's `prompt.md` "Airtable access" section for
+what it does today. The config below is kept as a tested, working
+reference for standing this back up (for Legal Tracker or a new base) if a
+future caller's trust boundary genuinely needs server-enforced tier
+scoping rather than a native connector. Since this lives in Script
+Properties rather than in code, this remains the checked-in record of what
+it was (and would again be) set to — update this block if that
+deployment's config ever changes, so it doesn't only exist as tribal
+knowledge in one Apps Script project's settings.
 
 ```json
 {
@@ -92,65 +98,60 @@ exist as tribal knowledge in one Apps Script project's settings.
 
 Rationale for these specific choices lives in `CLAUDE.md`'s `airtable-mcp`
 MCP-server section (which describes this Legal Tracker deployment
-specifically) and in each routine's `prompt.md` — this file only needs to
-be the source of truth for the config's actual current value.
+specifically) and in each routine's `prompt.md`'s git history — this file
+only needs to be the source of truth for the config's value as it was (and
+would again be) set.
 
-`legal-tracker-triage` and `nat-1-1-briefing` use the `unsupervised` token.
-`daily-brief` uses the `supervised` token instead, since its Step 2 needs
-`Cases`/`Case Activity` write access that `unsupervised` doesn't have on
-this deployment.
+`legal-tracker-triage`, `legal-tracker-triage-review`, and
+`nat-1-1-briefing` were configured for the `unsupervised` token.
+`daily-brief` was the exception, configured for `supervised`, since its
+Step 2 needed `Cases`/`Case Activity` write access that `unsupervised`
+didn't have on this deployment. None of the four currently hold either
+token — see "Airtable access" in each routine's `prompt.md` for the native
+connector calls that replaced them.
 
 `AIRTABLE_BASE_ID` for this deployment is `appFIB9fJCzTeFDcG`.
 
 `AIRTABLE_MCP_URL` for this deployment:
 `https://script.google.com/macros/s/AKfycbxfjxmrC2QqY3sv_LjMRI8EbeF5VJTFBpGzA_WNOa8b668G3wW0Uqq11XP9mjxs_xSK2A/exec`.
-It isn't secret, but rather than sit in each of the three routines'
-environments as an independent env var copy, it's sourced the same way as
-the `unsupervised` token below — one row in the Secrets Sheet, read at
-runtime. This line is the checked-in record of what that row's value
-should be (so a diff shows if it ever drifts); the routines themselves
-never read it from here or from an environment variable. If this
-deployment is ever retired and replaced with a brand-new one (not just a
-new version of the existing one — Apps Script keeps the same URL across
-version pushes), update this line and the Secrets Sheet row together.
+Confirmed unreachable (returns a 404 from Google, not a proxy/network
+error) as of the run that prompted moving every caller off this
+deployment — if this server is ever redeployed, this line (and the
+Secrets Sheet row below, if that lookup pattern is reused) needs updating
+to the new URL together.
 
-**How `legal-tracker-triage`, `nat-1-1-briefing`, and `daily-brief` get
-`AIRTABLE_MCP_URL` and their tier's token:** none of these is a plain
-environment variable — each routine looks both up at the start of its run
-from a private, single-owner ("Secrets Sheet") Google Sheet (spreadsheet ID
-`1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned solely by
-`chris.rider@gopuff.com`, no other collaborators) that also holds several
-unrelated secrets for other systems (the Airtable API key itself,
-BrightFlag credentials, a routines API token), using the Google Drive
-MCP's `read_file_content` on that file ID. The sheet needs three rows for
-this deployment: `AIRTABLE_MCP_URL` (value above),
-`AIRTABLE_MCP_TOKEN_UNSUPERVISED` (used by `legal-tracker-triage` and
-`nat-1-1-briefing`), and `AIRTABLE_MCP_TOKEN_SUPERVISED` (used by
-`daily-brief` only). `legal-tracker-triage-review` doesn't do any of this —
-it talks to the base through the native Airtable MCP connector, which has
-its own OAuth connection and no deployment URL or proxy token to look up.
+**How the four routines used to get `AIRTABLE_MCP_URL` and their tier's
+token, before all four moved to the native connector:** none of these was
+a plain environment variable — each routine looked both up at the start of
+its run from a private, single-owner ("Secrets Sheet") Google Sheet
+(spreadsheet ID `1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned
+solely by `chris.rider@gopuff.com`, no other collaborators) that also
+holds several unrelated secrets for other systems (the Airtable API key
+itself, BrightFlag credentials, a routines API token), using the Google
+Drive MCP's `read_file_content` on that file ID. The sheet still has three
+rows for this deployment — `AIRTABLE_MCP_URL` (value above),
+`AIRTABLE_MCP_TOKEN_UNSUPERVISED`, and `AIRTABLE_MCP_TOKEN_SUPERVISED` —
+left in place in case a future caller needs this lookup pattern again, but
+no current routine reads them.
 
-This is a **whole-file read, not a scoped one** — there's no Google Sheets
-MCP connector or range-scoped read tool available in this environment.
-Confirmed by checking both `ListConnectors` (nothing named Sheets) and
-`SearchMcpRegistry` (only Google Drive is connected; its tools —
-`read_file_content`, `download_file_content`, etc. — read or download
-entire files, no range parameter). A `google-sheets` *skill* does support
-single-cell/range reads, but it's not an MCP connector: it shells out to
-PowerShell via Desktop Commander on Chris's local desktop and reads its own
-auth passphrase from a local file path, so it's unreachable from a cloud
-routine. Given that, each of these three routines' `prompt.md` is explicit
-that even though the read returns everything in the sheet, only
-`AIRTABLE_MCP_URL` and its own tier's token row
-(`AIRTABLE_MCP_TOKEN_UNSUPERVISED` for `legal-tracker-triage` and
-`nat-1-1-briefing`, `AIRTABLE_MCP_TOKEN_SUPERVISED` for `daily-brief`)
-may ever be used, echoed, or referenced — never any other row or the
-sheet's contents in general. That's enforced by prompt discipline, not by
-the read itself,
-which is a real trade-off worth knowing rather than glossing over: a
-routine that mishandled this (or was successfully prompt-injected into
-ignoring the instruction) would have every other secret in the vault
-sitting in its own context.
+This was always a **whole-file read, not a scoped one** — there's no
+Google Sheets MCP connector or range-scoped read tool available in this
+environment. Confirmed by checking both `ListConnectors` (nothing named
+Sheets) and `SearchMcpRegistry` (only Google Drive is connected; its
+tools — `read_file_content`, `download_file_content`, etc. — read or
+download entire files, no range parameter). A `google-sheets` *skill* does
+support single-cell/range reads, but it's not an MCP connector: it shells
+out to PowerShell via Desktop Commander on Chris's local desktop and reads
+its own auth passphrase from a local file path, so it's unreachable from a
+cloud routine. While this pattern was live, each routine's `prompt.md` was
+explicit that even though the read returned everything in the sheet, only
+`AIRTABLE_MCP_URL` and its own tier's token row could ever be used, echoed,
+or referenced — never any other row or the sheet's contents in general.
+That was enforced by prompt discipline, not by the read itself, which was
+a real trade-off worth knowing rather than glossing over: a routine that
+mishandled this (or was successfully prompt-injected into ignoring the
+instruction) would have had every other secret in the vault sitting in its
+own context.
 
 ## Testing before wiring up any caller
 

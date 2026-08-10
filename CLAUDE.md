@@ -24,15 +24,16 @@ Items that appear in multiple sources are consolidated into a single entry with 
 
 **Snoozing and extending items:** Replying "resurface Friday" (or "in N days", a specific date, etc.) to a numbered item holds it off the brief until that date instead of showing it every morning. Items sourced from Gmail/Slack that are about to age out of the 7-day sweep window get flagged with a ⏳ note in the brief; replying "continue for 2 weeks" (or any duration) keeps that item visible past its natural drop-off point. Because each run only reads yesterday's thread reply, both a multi-day hold and an extension have to be persisted somewhere the routine will still see days later — tracked in `routines/daily-brief/state.json`, which (unlike other routines' state files) is checked into this repo rather than created at runtime, so it survives across an ephemeral environment and stays reviewable in git history. The routine reads it each morning for items due or expiring, and commits it back after any change.
 
-**Airtable access:** Goes through the `airtable-mcp` skill/server (see "MCP servers" and "Skills" below), talking to the Legal Tracker deployment — never holds `AIRTABLE_API_KEY` directly. Unlike the other three callers, uses the **`supervised`** tier token, because Step 2's ALL-CAPS keyword handling needs to write to `Cases` and `Case Activity`, which only `supervised` can touch. This is safe despite the routine running unattended: every write is gated behind parsing Chris's own numbered Slack reply, never behind raw swept Gmail/Slack content, so it doesn't carry the injection risk the tier split exists to contain — see `prompt.md` Step 2 for the full rationale.
+**Airtable access:** Talks to the Legal Tracker base through the connected native **Airtable** MCP connector directly, not the `airtable-mcp` Apps Script proxy/skill — never holds `AIRTABLE_API_KEY` directly (the connector's own OAuth connection holds credentials instead). No Secrets Sheet lookup and no deployment URL/tier token, since the native connector doesn't use either. This means the proxy's server-enforced `supervised`/`unsupervised` split — which used to be the only thing technically stopping this routine's `Cases`/`Case Activity` writes from being reachable by a lower-trust caller — no longer exists anywhere in this system; the restriction that only `daily-brief` may write those two tables is now enforced by each routine's `prompt.md` alone. This is still an acceptable trade for `daily-brief` specifically because every write here is gated behind parsing Chris's own numbered Slack reply, never behind raw swept Gmail/Slack content — see `prompt.md` Step 2 for the full rationale — but it's worth knowing the technical backstop is gone, not just relocated.
 
 **Required MCP integrations:**
+- Airtable (native connector — `list_tables_for_base`, `list_records_for_table`, `update_records_for_table`)
 - Google Calendar (list today's events)
 - Gmail (read threads, search)
 - Slack (search public and private channels, DMs, group DMs; send DMs)
-- Google Drive (`search_files`/`list_recent_files`, to check for completion evidence on self-authored action items; `read_file_content` on the Secrets Sheet for the Airtable deployment URL/token — see "Airtable access" above)
+- Google Drive (`search_files`/`list_recent_files`, to check for completion evidence on self-authored action items)
 
-**Required environment:** `SHARED_SECRET` — same value as `weekly-accomplishments`, set on the environment this routine runs from, matching the Script Property configured in the Daily Tasks bridge Apps Script deployment. Used by Phase 2 (see `prompt.md`) to authenticate Task-creation calls. `AIRTABLE_MCP_URL` and the `supervised` tier token are looked up at the start of each run from the private Secrets Sheet, not held as environment variables (see "Airtable access" above).
+**Required environment:** `SHARED_SECRET` — same value as `weekly-accomplishments`, set on the environment this routine runs from, matching the Script Property configured in the Daily Tasks bridge Apps Script deployment. Used by Phase 2 (see `prompt.md`) to authenticate Task-creation calls.
 
 **Filtering rules enforced:**
 - Excludes direct Yardstik support emails (`support@yardstik.com`)
@@ -48,7 +49,7 @@ Items that appear in multiple sources are consolidated into a single entry with 
 
 Sweeps Gmail and Slack for new case-related developments (14-day window — double the 7-day gap between weekly runs, same safety-margin logic the old daily version used), matches each to a case in the "Legal Tracker" Airtable base, and writes draft rows into the **Update Matches** table for manual review. Never writes to **Case Activity** — promotion happens via an Airtable Automation, triggered when Chris sets `Approved` to `Approved` on an Update Matches row, that copies (not moves) the row into Case Activity. The wider window between runs also means a thread with several back-and-forth messages since the last run collapses into one synthesized `Entry` covering all of them, rather than one row per message — this falls out of the existing "only write a new row for a new message postdating the last entry" dedup rule once runs are days apart instead of hours; it does not merge separate threads about the same case into one row.
 
-**Airtable access:** Goes through the `airtable-mcp` skill/server (see "MCP servers" and "Skills" below), talking to the Legal Tracker deployment, using the `unsupervised` tier — never holds `AIRTABLE_API_KEY` directly. Confirms table/field names against the live schema (`airtable_get_schema`) before assuming a hardcoded name is still correct.
+**Airtable access:** Talks to the Legal Tracker base through the connected native **Airtable** MCP connector directly, not the `airtable-mcp` Apps Script proxy/skill — never holds `AIRTABLE_API_KEY` directly (the connector's own OAuth connection holds credentials instead). Confirms table/field IDs against the live schema (`list_tables_for_base`) before assuming a hardcoded name is still correct. This routine matches directly against untrusted swept Gmail/Slack content, so the proxy's server-enforced restriction to `Update Matches`/`Thread Matches` only used to be a real backstop against a successful prompt injection — that backstop no longer exists technically; `prompt.md`'s "Airtable access" section is explicit that the write restriction is now prompt-enforced alone and asks for stricter-than-required discipline to compensate (never call an update/delete tool at all, only ever create in those two tables).
 
 **Matching sources:**
 1. Gmail — sender/recipient vs. Opposing Counsel contact email, Matter/claimant name, case number, or the Gmail label `!update` (always logged, even unmatched, flagged for manual case assignment)
@@ -57,11 +58,11 @@ Sweeps Gmail and Slack for new case-related developments (14-day window — doub
 A Thread Matches table caches thread→case matches so repeat runs skip re-matching. Already-logged threads are only re-written if a new message postdates the existing entry.
 
 **Required MCP integrations:**
+- Airtable (native connector — `list_tables_for_base`, `list_records_for_table`, `create_records_for_table`)
 - Gmail (read threads, search)
 - Slack (search public and private channels; send messages)
-- Google Drive (`read_file_content` on the Secrets Sheet — a whole-file read, since no scoped-read tool exists for Sheets in this environment; see "Airtable access" above)
 
-**Required environment:** none. Both `AIRTABLE_MCP_URL` and the `unsupervised` tier token are looked up at the start of each run from the private Secrets Sheet, not held as environment variables (see "Airtable access" above and `mcp-servers/airtable-mcp/README.md`).
+**Required environment:** none.
 
 ### legal-tracker-triage-review
 
@@ -77,7 +78,7 @@ Approved rows are deleted on a different trigger: not age, but whether the row h
 
 Only once a pattern's cumulative count reaches 5 — in either direction — and it hasn't also matched a row from the opposite verdict, which would mean the pattern is too broad, does it propose a specific edit to `legal-tracker-triage/prompt.md` as a pull request, with representative examples as evidence. A rejection pattern typically proposes an exclusion rule; an approval pattern typically proposes loosening or strengthening a matching/confidence rule. It never edits that file directly and never merges its own PR; Chris reviews and merges like any other change. Rows Chris hasn't reviewed yet (blank) are never touched.
 
-**Airtable access:** Unlike the other three callers, talks to Airtable through the connected native **Airtable** MCP connector directly, not the `airtable-mcp` Apps Script proxy/skill — read-only plus deletes on Update Matches, never holds `AIRTABLE_API_KEY` directly (the connector's own OAuth connection holds credentials instead). No Secrets Sheet lookup and no deployment URL/tier token, since the native connector doesn't use either. This also means the proxy's server-enforced tier scoping doesn't apply here — the write/delete restrictions are enforced by `prompt.md` alone, not by anything server-side. See `prompt.md`'s "Airtable access" section for the specific tool calls and the rationale for going native here instead of through the shared proxy.
+**Airtable access:** Talks to Airtable through the connected native **Airtable** MCP connector directly, not the `airtable-mcp` Apps Script proxy/skill (unused by any routine now) — read-only plus deletes on Update Matches, never holds `AIRTABLE_API_KEY` directly (the connector's own OAuth connection holds credentials instead). No Secrets Sheet lookup and no deployment URL/tier token, since the native connector doesn't use either. This also means the proxy's server-enforced tier scoping doesn't apply here — the write/delete restrictions are enforced by `prompt.md` alone, not by anything server-side. See `prompt.md`'s "Airtable access" section for the specific tool calls.
 
 **Required MCP integrations:**
 - Airtable (native connector — `list_tables_for_base`, `list_records_for_table`, `delete_records_for_table`)
@@ -101,13 +102,13 @@ Prepares Chris Rider's briefing ahead of his recurring 1:1 with Nat Flandreau, e
 A previous three-phase version of this routine (schedule-triggered draft, then Slack-reaction-driven finalize/publish via Workflow Builder → Google Sheet → Apps Script → API, with phase state in `state.json`) is preserved for reference at `routines/nat-1-1-briefing/prompt.deprecated.md` but is no longer used.
 
 **Required MCP integrations:**
+- Airtable (native connector — `list_tables_for_base`, `list_records_for_table`, read-only)
 - Google Calendar (check for today's Chris/Nat 1:1)
 - Slack (read/search channels, send messages)
-- Google Drive (`read_file_content` on the Secrets Sheet each run — a whole-file read, since no scoped-read tool exists for Sheets in this environment; see "Airtable access" below)
 
-**Airtable access:** Reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the `airtable-mcp` skill/server, read-only — never holds `AIRTABLE_API_KEY` directly. Uses the `unsupervised` tier token even though this routine never needs to write to Airtable at all, so the more restrictive token costs nothing functionally.
+**Airtable access:** Reads the Legal Tracker (`appFIB9fJCzTeFDcG`) through the connected native **Airtable** MCP connector directly, not the `airtable-mcp` Apps Script proxy/skill — read-only, never holds `AIRTABLE_API_KEY` directly (the connector's own OAuth connection holds credentials instead). No Secrets Sheet lookup and no deployment URL/tier token, since the native connector doesn't use either. This routine never writes to Airtable, so unlike `legal-tracker-triage`/`daily-brief` there's no lost write-side enforcement to weigh here — going native costs nothing functionally.
 
-**Required environment:** none. Same as `legal-tracker-triage`, both `AIRTABLE_MCP_URL` and the `unsupervised` tier token are looked up from the Secrets Sheet at runtime, not held as environment variables.
+**Required environment:** none.
 
 **Note:** The routine's live scheduled trigger should be configured to spawn a fresh session on each fire (not resume a persistent session), since each weekday's draft/edit/publish cycle is self-contained.
 
@@ -176,57 +177,47 @@ a table outside it, regardless of tier. `airtable_query` reads any table in
 unrestricted (read-only metadata) and lets a caller detect a renamed
 table/field before trusting a hardcoded name.
 
-The first (and currently only) deployment of this server proxies the Legal
-Tracker base (`appFIB9fJCzTeFDcG`) for `legal-tracker-triage`,
-`nat-1-1-briefing`, and `daily-brief` — these three go through it (via the
-`airtable-mcp` skill below) instead of holding `AIRTABLE_API_KEY` directly.
-`legal-tracker-triage-review` is the exception: it talks to this same base
-through the native **Airtable** MCP connector directly instead of this
-proxy — see its `prompt.md` for why (no per-caller tier scoping it needs,
-and the proxy has proven fragile as a hard dependency for a routine whose
-job is just read + delete on one table). Its config specifically:
-`unsupervised` can write `Update Matches`/`Thread Matches`, `supervised`
-adds `Case Activity`/`Cases`, and `deleteTables` is `Update Matches`
-only — rationale in each routine's `prompt.md`. Of the three proxy callers,
-`legal-tracker-triage` and `nat-1-1-briefing` use the `unsupervised` token;
-`daily-brief` is the exception, using `supervised` because it needs
-`Cases`/`Case Activity` write access — see its `prompt.md` Step 2 for why
-that's still safe for an unattended routine. See
-`mcp-servers/airtable-mcp/README.md` for that deployment's actual
-`AIRTABLE_MCP_CONFIG` value (the checked-in source of truth, since it now
-lives in Script Properties rather than code), plus deployment and testing
-steps for standing up a new deployment against a different base.
+**Currently unused.** The first (and so far only) deployment of this server
+proxied the Legal Tracker base (`appFIB9fJCzTeFDcG`) for
+`legal-tracker-triage`, `legal-tracker-triage-review`, `nat-1-1-briefing`,
+and `daily-brief`. All four have since moved to calling the connected
+native **Airtable** MCP connector directly instead — the deployment's URL
+turned out to be unreachable (the Apps Script Web App itself, not a
+network/proxy issue — see `legal-tracker-triage-review`'s run history), and
+once one routine had already proven out the native-connector path, the
+rest followed rather than depending on a fragile single point of failure
+shared by all four. See each routine's `prompt.md` "Airtable access"
+section for its specific tool calls.
 
-None of these three callers hold `AIRTABLE_MCP_URL` or their tier's token
-as plain environment variables — each looks up both, at the start of its
-run, from a private, single-owner Secrets Sheet (Google Sheet, owned
-solely by Chris) that also holds unrelated secrets for other systems, via
-the Google Drive MCP's `read_file_content`. `AIRTABLE_MCP_URL` isn't
-sensitive the way the token is — it moved into the sheet for operational
-reasons, not secrecy: every caller already pays for a whole-file read to
-get the token, so having it also read one more row costs nothing extra,
-and it replaces independent per-environment copies with a single value
-that's edited in one place. See `mcp-servers/airtable-mcp/README.md` for
-the current value of that row (the checked-in record of what it should
-be, since the sheet itself isn't). `legal-tracker-triage-review` doesn't
-do this lookup at all — the native connector it uses has no deployment
-URL or proxy token to look up.
+This means the tier system below — the actual reason this proxy existed,
+not just an implementation detail — currently has no live enforcement
+anywhere in this repo. Worth restating plainly: `legal-tracker-triage`
+matches directly against untrusted swept Gmail/Slack content and used to
+be structurally incapable of writing to `Case Activity`/`Cases` even under
+a successful prompt injection, because the server would reject the call
+regardless of what the caller's own prompt said. `daily-brief`'s access to
+those same two tables used to be gated the same way, restricted to the one
+routine whose writes are gated behind Chris's own Slack reply rather than
+raw swept content. Neither restriction is enforced by anything but prompt
+text now. Each routine's `prompt.md` says this explicitly and asks for
+stricter-than-required discipline to compensate, but that is a materially
+different security posture than "the server won't let this happen" — worth
+knowing if a redesign ever revisits this.
 
-That read is a whole-file read, not a scoped one — there's no Google
-Sheets MCP connector or range-scoped read tool available in this
-environment (confirmed: only Google Drive is connected, and its tools
-read/download entire files; the `google-sheets` skill that does support
-ranges only works from Chris's local desktop via Desktop
-Commander/PowerShell, unreachable from a cloud routine). Each prompt is
-explicit that only the two named rows' values (`AIRTABLE_MCP_URL` and its
-own tier's token row — `AIRTABLE_MCP_TOKEN_UNSUPERVISED` for
-`legal-tracker-triage` and `nat-1-1-briefing`,
-`AIRTABLE_MCP_TOKEN_SUPERVISED` for `daily-brief`) may ever be
-used, echoed, or
-referenced — never any other row or the sheet's contents in general — but
-this is a prompt-level discipline, not a technical restriction the read
-itself enforces. See `mcp-servers/airtable-mcp/README.md` for the sheet ID
-and the exact lookup steps.
+The config below (and the deployment/testing steps in
+`mcp-servers/airtable-mcp/README.md`) are left in place as working,
+tested reference — this server is generic to any base, not tied to Legal
+Tracker, and a future caller whose trust boundary genuinely needs
+server-enforced tier scoping (rather than the Legal Tracker base's
+current all-native-connector approach) can stand up its own deployment
+without writing this from scratch.
+
+The Legal Tracker `AIRTABLE_MCP_CONFIG` value, and the Secrets Sheet
+mechanics a proxy caller would use to source `AIRTABLE_MCP_URL`/its tier
+token, are preserved as a worked example in
+`mcp-servers/airtable-mcp/README.md` even though no current routine reads
+them — useful if this base (or a new one) ever needs a proxied deployment
+again.
 
 ## Skills
 
@@ -235,17 +226,20 @@ and the exact lookup steps.
 **Code:** `skills/airtable-mcp/SKILL.md`
 
 Packages how to call any deployment of the `airtable-mcp` MCP server (see
-"MCP servers" above) into one reusable reference, so routine/skill prompts
-say "use the airtable-mcp skill" instead of each duplicating the JSON-RPC
-call format, tool schemas, and tier semantics. Documents both transports —
-calling the MCP tools directly when a connector is configured, or
-`curl`-ing the deployment URL with `AIRTABLE_MCP_URL`/`AIRTABLE_MCP_TOKEN`
-when it isn't (the current native routines' situation) — and lists known
-deployments (currently just Legal Tracker) so a caller can find the right
-one without reading every routine's prompt.md. Doesn't add any enforcement
-of its own — the tier/`deleteTables` checks in `AirtableMcpServer.gs`
-remain the actual security boundary; this skill only keeps every caller's
-knowledge of how to use it consistent and prevents that knowledge from
+"MCP servers" above) into one reusable reference, kept for whenever a
+future caller needs server-enforced tier scoping rather than a native
+connector. **No routine currently calls this skill** — all four Legal
+Tracker routines moved to the native Airtable MCP connector after the
+proxy's deployment URL turned out to be unreachable (see the "MCP servers"
+section above). Documents both transports — calling the MCP tools
+directly when a connector is configured, or `curl`-ing the deployment URL
+with `AIRTABLE_MCP_URL`/`AIRTABLE_MCP_TOKEN` when it isn't — and lists
+known deployments (currently just Legal Tracker, now unused) so a future
+caller can find the right one without reading every routine's prompt.md.
+Doesn't add any enforcement of its own — the tier/`deleteTables` checks in
+`AirtableMcpServer.gs` remain the actual security boundary; this skill only
+keeps every caller's knowledge of how to use it consistent and prevents
+that knowledge from
 drifting across prompt files.
 
 ## Adding new routines
