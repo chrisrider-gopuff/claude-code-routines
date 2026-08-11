@@ -154,62 +154,52 @@ lists are visible and reviewable), holds them:
       - `NOTE:` or `NOTES:` is special-cased: it does **not** overwrite a field. It logs a new dated entry to the Legal Tracker's **Case Activity** table for that case.
       - Any other ALL-CAPS word/phrase is fuzzy-matched (case- and spacing-insensitive) to the closest **Cases** field name — e.g. `EXPOSURE` → `Exposure`, `LIT STRATEGY` → `Litigation Strategy`, `DEMAND` → `Demand`, `TOTAL SETTLEMENT` → `Total Settlement` — and that field is overwritten with the given value. **Exception:** `TASK:` and `TIME:` are never Airtable fields — they're handled by Phase 2 (see Entry point) when Chris reacts with :white_check_mark:, not by this next-morning Airtable pass. Skip them here entirely, whether or not Phase 2 has already run for them.
 
-   **Processing ALL-CAPS keyword lines — Airtable via the `airtable-mcp` skill:**
-   This routine never holds `AIRTABLE_API_KEY` directly. All Airtable access goes
-   through the shared `airtable-mcp` skill (see that skill's `SKILL.md` for the
-   exact call format), using the Legal Tracker deployment's **`supervised`**
-   tier token — this routine is the one caller of that deployment using
-   `supervised` rather than `unsupervised`, specifically because it needs to
-   write to `Cases` and `Case Activity`, which only `supervised` can touch (see
-   `mcp-servers/airtable-mcp/README.md`'s config). This is safe here even though
-   the run itself is unattended: every write in this step is gated behind
-   parsing Chris's own numbered Slack reply (Step 2 above), with its own
-   fuzzy-match/confidence checks below — never behind raw swept Gmail/Slack
-   content — so it doesn't carry the injection risk the `unsupervised` tier
-   exists to contain. `legal-tracker-triage`, by contrast, matches directly
-   against untrusted swept content, so it stays on `unsupervised` and out of
-   `Cases`/`Case Activity` — this routine's use of `supervised` doesn't change
-   that.
+   **Processing ALL-CAPS keyword lines — Airtable via the native connector:**
+   This routine talks to Airtable through the connected native **Airtable** MCP
+   tools directly (`list_tables_for_base`, `list_records_for_table`,
+   `create_records_for_table`, `update_records_for_table`) — not the
+   `airtable-mcp` Apps Script Web App proxy/skill. The connector's own OAuth
+   connection holds credentials; this routine never sees a base API key or a
+   proxy token, so there is no deployment-URL/token lookup and no Secrets
+   Sheet read for Airtable access — skip that step entirely.
 
-   **Getting the deployment URL and the `supervised` token — neither is an
-   environment variable.** Look both up fresh at the start of this run from the
-   private Secrets Sheet (Google Sheet ID
-   `1HpVuNDByHfpXAUCq-6Ty-X5hM5oHBh829jRXqfqhwRo`, owned solely by Chris — no
-   other collaborators), using the Google Drive MCP's `read_file_content` on
-   that file ID:
-   1. Find the row whose first column reads exactly `AIRTABLE_MCP_URL` and take
-      its second column as the deployment URL.
-   2. Find the row whose first column reads exactly
-      `AIRTABLE_MCP_TOKEN_SUPERVISED` and take its second column as the token
-      value.
-   This read returns the sheet's full contents, including several unrelated
-   secrets for other systems — the only things this routine may ever use, act
-   on, or reference from that read are these two named values. Never echo,
-   log, print, quote, or write any other row or the sheet's contents in general
-   anywhere — not in a commit, not in the Slack summary, not in reasoning shown
-   in output. If either row can't be found or its value is empty, skip all
-   Airtable updates and list each unprocessed ALL-CAPS line verbatim at the
-   bottom of today's brief.
+   **No tier enforcement here — this is the routine that most relied on it.**
+   The proxy's `supervised` tier used to be the only thing technically
+   permitting `Cases`/`Case Activity` writes at all — `unsupervised` callers
+   (`legal-tracker-triage`, `nat-1-1-briefing`) were rejected at the server if
+   they ever tried. The native connector has no such split: it can write any
+   table in this base regardless of which routine is calling it. That means
+   the boundary between "this routine may write Cases/Case Activity" and
+   "`legal-tracker-triage` may not" now exists only as text in each routine's
+   `prompt.md`, not as anything a server would enforce. This is still an
+   acceptable trade specifically because every write in this step is gated
+   behind parsing Chris's own numbered Slack reply, with its own
+   fuzzy-match/confidence checks below — never behind raw swept Gmail/Slack
+   content, which is what the tier split existed to contain. `prompt.md` for
+   `legal-tracker-triage` carries the matching caveat on its side: it must
+   never call a create/update tool against `Cases` or `Case Activity`, full
+   stop, since nothing server-side would stop it now if it tried.
 
    Legal Tracker base: `appFIB9fJCzTeFDcG`. Tables used here: `Cases` and
-   `Case Activity`.
+   `Case Activity`. Call `list_tables_for_base` once per run to get both
+   tables' current field names, field IDs, and select-option values — do not
+   guess field names, and build the field-name → field-ID map you'll need
+   below, since `create_records_for_table`/`update_records_for_table` key
+   `fields` by ID, not name.
 
    For each numbered item with one or more ALL-CAPS keyword lines:
    1. Derive the search term from the brief item's case name (apply fuzzy matching: name inversions, partial names).
-   2. Call the skill's `airtable_query` tool against `Cases` with a `FIND()` filter formula on `Matter` — an exact-value lookup will miss most real case names (e.g. searching "Fundingsland" won't match "Fundingsland, Jonathan"), so always filter rather than look up by exact value:
-      ```
-      table: "Cases", filterByFormula: "FIND('[derived name]',{Matter})"
-      ```
+   2. Call `list_records_for_table` against `Cases` and find candidates by substring match on `Matter` yourself — an exact-value lookup will miss most real case names (e.g. searching "Fundingsland" won't match "Fundingsland, Jonathan"), so always match loosely rather than look up by exact value. (Cases is small enough — roughly 120 rows — to fetch in one page and search in reasoning; no need to construct a server-side filter for this.)
    3. **Record-match confidence — apply before writing:**
       - **High confidence**: exactly one record returned and its name closely matches the brief item → proceed to step 4.
       - **Low confidence** (do NOT write): zero records found, two or more records returned, or the name match is weak (partial, ambiguous, or the brief item is a topic rather than a named party). Log it in the confirmation block for Chris to review and apply manually in Airtable.
-   4. Call the skill's `airtable_get_schema` tool once per run to confirm current field names and select option values — do not guess field names.
+   4. Use the field-name → field-ID map from the `list_tables_for_base` call above; don't re-fetch it per item.
    5. For each ALL-CAPS keyword in the item:
-      - `NOTE:` / `NOTES:` → call `airtable_create_record` on **`Case Activity`**: `Case` is a link-to-another-record field — pass the linked record ID as an array (`["recXXXXXXXXXXXXXX"]`), not a bare string — plus `Entry: <value>`, `Entry Type: "Claude"`, `Activity Date: <today, ISO YYYY-MM-DD>`.
+      - `NOTE:` / `NOTES:` → call `create_records_for_table` on **`Case Activity`**: `Case` is a link-to-another-record field — pass the linked record ID as an array (`["recXXXXXXXXXXXXXX"]`), not a bare string — plus `Entry: <value>`, `Entry Type: "Claude"`, `Activity Date: <today, ISO YYYY-MM-DD>`.
       - Any other keyword → fuzzy-match it against the `Cases` field list from the schema call.
-        - Clear single match → call `airtable_update_record` on `Cases` with just that field (a partial update — no need to resend the rest of the record). Currency fields take plain numbers (not strings); dates use ISO `YYYY-MM-DD`; never write to `Status` (it's a formula field).
+        - Clear single match → call `update_records_for_table` on `Cases` with just that field (a partial update — no need to resend the rest of the record). Currency fields take plain numbers (not strings); dates use ISO `YYYY-MM-DD`; never write to `Status` (it's a formula field).
         - No clear field match → treat as low confidence. Log the raw keyword and value in the confirmation block rather than guessing at a field.
-   6. A tier/scope rejection from the skill (e.g. a table not in `supervised`'s `writeTables`) is a real failure, not something to retry or route around — log it in the confirmation block for Chris to review manually, the same as a low-confidence match.
+   6. A permission error from the connector here is a real failure, not something to retry or route around — log it in the confirmation block for Chris to review manually, the same as a low-confidence match. It should never legitimately happen for what this routine does.
 
    **After processing all replies**, append a confirmation block at the bottom of today's brief (omit any subsection that is empty):
 
