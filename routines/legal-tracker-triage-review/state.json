@@ -1,0 +1,58 @@
+{
+  "rejectionPatterns": [
+    {
+      "id": "internal-team-only-discussion",
+      "description": "Internal-only legal-team discussion or forwarded internal question, with no case-relevant decision, answer, or external development",
+      "cumulativeCount": 4,
+      "examples": [
+        "Chris forwarded a question regarding Lawrence Terry's benefits/leave status to the internal LOA team; LOA Team acknowledged receipt.",
+        "Internal team gathered other-gig-platform work history for the nine drivers in the NYC mass arbitration (Guerrero et al.), responding to opposing counsel's information request.",
+        "Nat Flandreau said via Slack that the Bar Properties Litigation (Gardella) matter settled by \"splitting the difference,\" citing a figure of $355.",
+        "Michelle Carlson followed up requesting Nat/Hillary run a Brightflag report of outside counsel firm names used since 2016, per Faegre Drinker's privilege-log request."
+      ],
+      "lastSeenDate": "2026-08-11",
+      "proposedPrUrl": null
+    },
+    {
+      "id": "tracker-doc-housekeeping",
+      "description": "Discovery-tracker/document housekeeping mechanics (empty folder setup, tracker comment replies, marking items resolved, document-access grants, historical firm/personnel-list requests) with no case-development substance or decision",
+      "cumulativeCount": 7,
+      "examples": [
+        "Outside counsel (BIPC) requested the Martin case file alongside Wynn's; Chris set up a Drive folder, currently empty pending documents from counsel.",
+        "Sarah Louardi marked as resolved a discovery-tracker action item in the Okamura, Jeri matter concerning all communications between the employee and any ER representative.",
+        "Shayda Nour was granted edit access to the Leverson v. BevMo! Check Request document, indicating settlement payment processing is underway.",
+        "Seth Taylor replied to a Discovery Tracker comment thread in the Wynn, Jessica matter.",
+        "Opposing counsel followed up asking where to find Gopuff's discovery-tracker link; Chris pointed to the tracker."
+      ],
+      "lastSeenDate": "2026-08-11",
+      "proposedPrUrl": "https://github.com/chrisrider-gopuff/claude-code-routines/pull/32"
+    },
+    {
+      "id": "bare-ministerial-confirmation",
+      "description": "Bare confirmation that a routine administrative step occurred (data-gathering complete, duplicate re-transmittal) with no other detail — narrower than agreement-execution events, which conflict with approved rows (see dropped patterns note)",
+      "cumulativeCount": 2,
+      "examples": [
+        "Jad Allen confirmed via Slack that the underlying data-gathering request for the Gallardo Texas Workforce Commission wage claim is complete.",
+        "Duplicate transmittal of the same Notice of Hearing in Raina Cotton v. Beverages And More, Inc., re-sent by the registered agent under a separate transmittal number."
+      ],
+      "lastSeenDate": "2026-08-11",
+      "proposedPrUrl": null
+    }
+  ],
+  "approvalPatterns": [
+    {
+      "id": "new-case-service-confidence",
+      "description": "Formal service of a new complaint, lawsuit, or hearing/proceeding notice — including from a registered agent, process server, or court clerk rather than Opposing Counsel directly — reliably approved as case-development substance",
+      "cumulativeCount": 5,
+      "examples": [
+        "Gopuff (GoBrands, Inc.) was served with a putative class action complaint (Case No. 2026CV032349, Denver County District Court, CO) on July 10.",
+        "Yopima, LLC filed suit against GoBrands, Inc.; served on registered agent CSC on 7/8/26, with an answer or appearance due within 21 days.",
+        "Beverages And More, Inc. was served with a Notice of Hearing in Raina Cotton v. Beverages And More, Inc. before the CA Labor Commissioner; answer/appearance due 8/11/26.",
+        "Opposing counsel (Laurel Employment Law) asked whether Gopuff is authorized to accept service of the complaint by notice and acknowledgment, or whether service should proceed through the registered agent."
+      ],
+      "lastSeenDate": "2026-08-11",
+      "proposedPrUrl": "https://github.com/chrisrider-gopuff/claude-code-routines/pull/32"
+    }
+  ],
+  "lastRunDate": "2026-08-11"
+}
