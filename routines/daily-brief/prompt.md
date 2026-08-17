@@ -256,7 +256,7 @@ lists are visible and reviewable), holds them:
 
 7. Consolidate items: when the same underlying matter appears in multiple sources (e.g., a Slack DM and a Gmail thread, or a Slack DM and a self-authored note, or a snoozed item resurfaced in Step 3), merge them into a single entry with sub-bullets for each distinct next action.
 
-8. Send a message to the **#morning-briefing** Slack channel with the formatted output (see Format section below), leading with **Today's Meetings** followed by the numbered Urgent/Active/Monitoring sections.
+8. Send a message to the **#morning-briefing** Slack channel with the formatted output (see Format section below), leading with **Today's Meetings** followed by the numbered Urgent/Active/Monitoring sections. **Critical**: Verify that every item in the output has a unique sequential number from Step 7 (e.g., if there are 5 Urgent items numbered 1–5, the first Active item must be 6, not 1 or 6 repeated). Numbers must increment continuously across all three sections with no gaps or duplicates.
 
 ---
 
@@ -557,6 +557,8 @@ After collecting all Gmail and Slack items:
    - Otherwise, no flag.
 
 4. **No silent drop-off — items persist until explicitly dismissed.** Items on the brief stay on the brief. An item only leaves the numbered list if Chris explicitly dismisses it in his reply with language like "drop", "skip", "resolved", "settled", "done", "closing", "no action needed", "don't resurface", or similar. Do not drop items silently when their underlying Gmail/Slack source ages past the 7-day window or becomes inactive. If an item's source is aging out and no explicit dismissal has been received, automatically extend it in `state.json` (see "State tracking" above) with an `extendUntil` date far enough in the future that it won't age out before the next expected reply (e.g., 30 days), and carry it forward in the brief with a note like `(no recent activity — reply to dismiss or provide an update)`. This ensures no matter silently disappears from Chris's view without his explicit acknowledgment.
+
+5. **Assign sequential numbers across all sections.** After categorizing items into 🔴/🟡/📌 and flagging items for aging, assign sequential numbers starting at 1 and incrementing across ALL sections. Do NOT restart numbering at 1 for each section. The first 🔴 item gets 1, continue counting through all 🔴 items, then continue that same count for 🟡 items (e.g., if 🔴 has 5 items, 🟡 starts at 6), and continue through 📌 items. Every single item must have a unique sequential number in the final output. This is essential for Chris's numbered replies to map correctly to the brief items.
 
 ---
 
