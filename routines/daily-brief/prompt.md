@@ -244,7 +244,7 @@ lists are visible and reviewable), holds them:
    ```bash
    git add routines/daily-brief/state.json
    git commit -m "daily-brief: update state.json"
-   git push
+   git push origin HEAD:main
    ```
    Skip the commit entirely if `state.json` wasn't touched this run.
 
