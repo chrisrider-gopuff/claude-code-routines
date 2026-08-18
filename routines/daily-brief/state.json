@@ -1,26 +1,8 @@
 {
   "snoozed": [
     {
-      "matter": "Michael Osuji Court Order Email",
-      "summary": "Waiting for follow-up email response on deactivation determination and driver appeal",
-      "sourceLinks": ["https://mail.google.com/mail/u/0/#inbox/19f9d07d6cc4612a"],
-      "category": "urgent",
-      "note": "Emailed back. Wait for email. Resurface on Thursday if I don't see anything back.",
-      "snoozedOn": "2026-07-27",
-      "resurfaceDate": "2026-07-30"
-    },
-    {
-      "matter": "Progressive American Insurance v. Sims",
-      "summary": "Coverage question discussion with OC; no update since 7/21",
-      "sourceLinks": ["https://mail.google.com/mail/u/0/#inbox/19f85f5bed4fcb37"],
-      "category": "monitoring",
-      "note": "Resurface in two weeks",
-      "snoozedOn": "2026-07-27",
-      "resurfaceDate": "2026-08-10"
-    },
-    {
       "matter": "EEOC Calvin Overstreet Mediation",
-      "summary": "Mediation occurred 7/24; awaiting Truncellito's outcome update",
+      "summary": "Mediation occurring 8/28; awaiting Truncellito's outcome update",
       "sourceLinks": ["https://mail.google.com/mail/u/0/#inbox/19f945ef28a28995"],
       "category": "monitoring",
       "note": "Happening 8/28. drop until 3 days before.",
