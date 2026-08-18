@@ -1,0 +1,17 @@
+{
+  "rejectionPatterns": [
+    {
+      "id": "internal-work-product-no-external-development",
+      "description": "Entry describes internal deliberation or administrative work (approving a draft letter, working through discovery-tracker data) between Chris and a colleague/outside counsel, with no new case development or communication from an external party (opposing counsel, court, claimant).",
+      "cumulativeCount": 2,
+      "examples": [
+        "Chris approved outside counsel's (Greenberg Traurig) draft deficiency letter for the JAMS driver-partner arbitrations, to be sent ahead of the arbitrator and claimant.",
+        "Chris and Seth Taylor worked through the discovery-tracker response for time-tracking metric definitions (queued/delivering/scheduled/returning hours); Seth added narrative notes in place of a formal data dictionary."
+      ],
+      "lastSeenDate": "2026-07-22",
+      "proposedPrUrl": null
+    }
+  ],
+  "approvalPatterns": [],
+  "lastRunDate": "2026-08-18"
+}
