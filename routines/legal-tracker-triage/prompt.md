@@ -33,7 +33,7 @@ Call `list_tables_for_base` with `baseId` `appFIB9fJCzTeFDcG` at the start of th
 
 ## Step 1: Determine the review window
 
-End: now. Start: 14 days before now. This routine runs weekly (Fridays), so a 14-day window is double the 7-day gap between runs — the same doubling-for-safety-margin logic the old daily version used (48 hours for a 24-hour cadence), scaled to the new cadence. The margin exists against a single missed or failed run; the "already logged" dedup check in Step 3/4 makes re-scanning overlapping time safe, so the extra width costs search time, not correctness.
+End: the date this routine is run. Start: 14 days before that. This routine runs weekly, so a 14-day window is double the ~7-day gap between runs — the same doubling-for-safety-margin logic the old daily version used (48 hours for a 24-hour cadence), scaled to the new cadence. Compute the window off the actual run date, not an assumed day of week — the schedule's exact day/time is configured independently (see `schedule.yaml`) and can drift from whatever this file last described, but the 14-day margin holds regardless of which day that turns out to be. The margin exists against a single missed or failed run; the "already logged" dedup check in Step 3/4 makes re-scanning overlapping time safe, so the extra width costs search time, not correctness.
 
 ## Step 2: Load matching context
 
