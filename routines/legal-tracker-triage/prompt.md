@@ -46,6 +46,8 @@ End: the date this routine is run. Start: 14 days before that. This routine runs
 
 **Primary search:** Use the Gmail MCP tools (`search_threads`, `get_thread`) with a broad date-range query across the review window to capture general case-related activity.
 
+**Dedicated `!update` label search — always run this, unconditionally, every run, regardless of whether the broad search above succeeded:** run `label:"!update"` within the review window. This is a human-applied "log this" signal and its own thread can be brand-new (not previously cached in Thread Matches) with no other case-identifying feature in a short first message — a broad date-range search "succeeding" does not mean it surfaced every `!update`-labeled thread; a real example: a single-message thread with nothing but the label and a generic subject line was invisible to the broad search and only findable this way. Do not gate this search behind the broad search failing — it is a mandatory search every run, not a fallback tier.
+
 **If the broad search fails (service error: "currently unavailable", timeout, etc.) OR if you suspect truncation:**
 
 Immediately implement the fallback strategy — do NOT skip Gmail or post a summary saying no activity was found. The fallback ensures completeness even when the broad search is unavailable. Execute searches in this order:
@@ -55,8 +57,6 @@ Immediately implement the fallback strategy — do NOT skip Gmail or post a summ
 2. **If matter-name searches incomplete or still failing, split by Opposing Counsel emails:** For each Primary Contact Email from Step 2's Opposing Counsel list, search for threads from/to that email within the review window.
 
 3. **If still incomplete, split by case numbers:** For threads mentioning case/docket numbers (e.g., "Case #2025-", "Docket -"), search the review window.
-
-4. **Dedicated `!update` label search:** Always run `label:"!update"` within the review window regardless of how the other searches went — this ensures no labeled thread is missed.
 
 Retry failed individual searches with exponential backoff (1s, 2s, 4s delays) before moving to the next fallback tier. If a search tier is still unavailable after backoff, **document the failure in a variable** (e.g., `gmail_status = "PARTIAL — matter-name fallback failed after retries"`) and note it in the Slack summary later. This allows the routine to report "INCOMPLETE" when it stops due to service failures, vs. "COMPLETE" when searches finish (even with zero results).
 
