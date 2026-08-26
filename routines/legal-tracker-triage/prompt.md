@@ -33,14 +33,14 @@ Call `list_tables_for_base` with `baseId` `appFIB9fJCzTeFDcG` at the start of th
 
 ## Step 1: Determine the review window
 
-End: now. Start: 14 days before now. This routine runs weekly (Fridays), so a 14-day window is double the 7-day gap between runs — the same doubling-for-safety-margin logic the old daily version used (48 hours for a 24-hour cadence), scaled to the new cadence. The margin exists against a single missed or failed run; the "already logged" dedup check in Step 3/4 makes re-scanning overlapping time safe, so the extra width costs search time, not correctness.
+End: the date this routine is run. Start: 14 days before that. This routine runs weekly, so a 14-day window is double the ~7-day gap between runs — the same doubling-for-safety-margin logic the old daily version used (48 hours for a 24-hour cadence), scaled to the new cadence. Compute the window off the actual run date, not an assumed day of week — the schedule's exact day/time is configured independently (see `schedule.yaml`) and can drift from whatever this file last described, but the 14-day margin holds regardless of which day that turns out to be. The margin exists against a single missed or failed run; the "already logged" dedup check in Step 3/4 makes re-scanning overlapping time safe, so the extra width costs search time, not correctness.
 
 ## Step 2: Load matching context
 
 - GET all Cases records (Matter, Status, record ID) via `list_records_for_table`, then keep only Status = Active for the matching pool below (a Closed case already cached in Thread Matches is still usable — see Constraints). Roughly 120 records, comfortably under one page (`pageSize` defaults to 1000) — no cursor loop needed here.
 - GET all Opposing Counsel records (Firm Name, Primary Contact Email, linked Cases).
 - GET all Thread Matches rows — build a Thread ID → Case(s)/Matter Name map.
-- GET Update Matches and Case Activity, collecting every non-empty Thread ID (from the Thread ID field or parsed out of the Email Link URL) into an "already logged" set.
+- GET Update Matches and Case Activity. For every non-empty Thread ID (from the Thread ID field or parsed out of the Email Link URL), record its Activity Date and build a Thread ID → most-recent-Activity-Date map — not just a flat "seen" set. A thread with multiple rows (across either table, or both) keeps the latest of all its Activity Dates. Steps 3 and 4 need this per-thread date, not just a yes/no on whether the thread was ever logged, to tell already-fully-logged activity apart from a continuing thread that has new messages since its last entry — the single most common shape of a real weekly update, since most active matters live in one ongoing thread rather than a new one each week.
 
 ## Step 3: Search Gmail — with mandatory fallback strategy
 
@@ -66,7 +66,7 @@ Retry failed individual searches with exponential backoff (1s, 2s, 4s delays) be
 2. Otherwise, match using (a) sender/recipient email vs. Opposing Counsel's Primary Contact Email, (b) Matter/claimant name in subject or body, (c) case number/docket reference, (d) the thread carries the Gmail label `!update` — this label is a human-applied signal meaning "this thread is case-related and must be logged," it does not by itself tell you which case. Link multiple cases if genuinely ambiguous (e.g. a joint mediation update) rather than guessing one — but only ever link real record IDs from the Cases map built in Step 2, never a matter name you're inferring or guessing at.
 3. If none of (a)–(d) fire, skip it — don't create a row. If there are more than a couple of these, mention the count in the Slack summary. EXCEPTION: if the thread carries the `!update` label but (a)–(c) don't identify a specific case, do NOT skip it — create the row anyway with Case left blank, Match Confidence "No Confidence", Entry Type "Email", and a note in the Entry text that it needs manual case assignment. Call these out explicitly (by subject line) in the Slack summary so Chris can assign them by hand.
 
-Skip a thread already in the "already logged" set from Step 2 UNLESS it has a new message dated after the most recent existing entry for that thread — in that case, write a new row summarizing only the new development.
+Skip a thread whose Thread ID is in the Step 2 map UNLESS it has a message dated after that thread's mapped Activity Date — in that case, write a new row summarizing only the message(s) postdating that date, not the thread's whole history. A Thread ID absent from the map entirely is a new thread — summarize all of its in-window activity normally.
 
 ## Step 4: Search Slack — with query optimization and volume handling
 
@@ -82,7 +82,7 @@ Skip a thread already in the "already logged" set from Step 2 UNLESS it has a ne
 - Paginate through results incrementally, writing matches as you find them (do not batch all matches and write at the end of Step 5 — write Update Matches rows as you go, to avoid losing partial progress).
 - Stop pagination after reviewing the first 100 results from that search; log the count of skipped results in the Slack summary if notable (e.g., "Slack search for {matter} returned 300 results; reviewed first 100").
 
-Apply the same Thread Matches cache and dedup logic as Gmail, using the Slack permalink or channel+thread-ts as the thread identifier. (The `!update` label rule in Step 3 is Gmail-only — Slack has no equivalent label mechanism.)
+Apply the same Thread Matches cache and Step 2 Thread ID → Activity Date map as Gmail, using the Slack permalink or channel+thread-ts as the thread identifier — same map, since Update Matches' Thread ID field holds both Gmail thread IDs and Slack thread identifiers. (The `!update` label rule in Step 3 is Gmail-only — Slack has no equivalent label mechanism.)
 
 **Distinction between service failure and empty results:**
 - If a Slack search fails (service unavailable, permission error), retry with exponential backoff (1s, 2s, 4s). If it remains unavailable after retries, document the failure (e.g., `slack_status = "PARTIAL — firm-name search failed after retries"`) and report "INCOMPLETE" in the summary.
@@ -144,7 +144,7 @@ Track whether Gmail and Slack searches **completed successfully** (even with 0 r
 
 ## Success criteria
 
-- Every new, case-matchable development from the window has exactly one row in Update Matches, no duplicates.
+- Every new, case-matchable development from the window has exactly one row in Update Matches, no duplicates — including a new message on a thread that already has a prior entry, which must still produce a fresh row summarizing only what postdates that entry (see the Step 2 Thread ID → Activity Date map). A previously-logged thread with no new messages this run produces no row.
 - Every `!update`-labeled Gmail thread from the window has a row, matched or flagged for manual assignment.
 - Thread Matches has a new row for every newly-classified thread.
 - A Slack message summarizing the run has been posted to #tracker-updates, clearly stating whether the run was COMPLETE or INCOMPLETE.

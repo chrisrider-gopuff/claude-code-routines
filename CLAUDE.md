@@ -43,7 +43,7 @@ Items that appear in multiple sources are consolidated into a single entry with 
 
 ### legal-tracker-triage
 
-**Schedule:** Weekly, Friday at 3:00 AM Eastern (America/New_York) — placeholder, adjust to preference
+**Schedule:** Weekly, Saturday at 7:00 AM Eastern (America/New_York) — placeholder, adjust to preference
 **Prompt:** `routines/legal-tracker-triage/prompt.md`  
 **Config:** `routines/legal-tracker-triage/schedule.yaml`
 
