@@ -235,8 +235,10 @@ else in this repo, it does not run as a Claude Code routine at all — no
 `prompt.md`, no `schedule.yaml`, no MCP connectors. It's meant to be
 deployed under a shared Google Workspace account, `litigation@gopuff.com`,
 which also becomes the standing point of contact for case correspondence
-going forward, and scheduled via Apps Script's own time-based triggers
-(`installWeeklyTrigger` in `Code.gs`).
+going forward. Two independent Apps Script time-based triggers run out of
+this one project: `main` (drafts new Update Matches rows, installed via
+`installWeeklyTrigger`) and `runCleanup` (deletes reviewed rows that are
+done with, installed via `installCleanupTrigger`) — see below.
 
 Differences from the Claude Code routine, in brief (full rationale in
 `Code.gs`'s header comment):
@@ -246,9 +248,11 @@ Differences from the Claude Code routine, in brief (full rationale in
   of `#tracker-updates`.
 - **Airtable access is direct REST with its own API key**, not the native
   connector and not the `airtable-mcp` proxy — there is no server-side
-  backstop on writes here (see `mcp-servers/airtable-mcp` below for what
-  that would look like); `WRITE_TABLE_ALLOWLIST` in `Code.gs` is the only
-  thing enforcing the Update Matches/Thread Matches-only write rule.
+  backstop on writes/deletes here (see `mcp-servers/airtable-mcp` below for
+  what that would look like); a hardcoded allowlist inside `createRecords_`
+  (writes: Update Matches/Thread Matches only) and `deleteRecords_`
+  (deletes: Update Matches only) in `Code.gs` is what enforces table scope
+  instead.
 - **Gemini (`gemini-2.5-flash` by default) replaces Claude's reasoning**
   for the judgment calls — match confidence, drafting the `Entry` text,
   and resisting prompt injection in swept email content — via narrow,
@@ -259,10 +263,18 @@ Differences from the Claude Code routine, in brief (full rationale in
 - **GmailApp gives full thread bodies natively**, so the search-preview
   truncation workaround in the Claude Code routine's Step 3 isn't needed
   here.
+- **`runCleanup` absorbs the housekeeping half of `legal-tracker-triage-review`**
+  (deleting aged-out `Not Approved` rows and promoted `Approved` rows) but
+  deliberately not its pattern-learning/GitHub-PR half — that depended on
+  one Update Matches row per discrete event, a signal that `legal-tracker-triage`
+  running weekly instead of daily (multiple events synthesized into one
+  `Entry`) already broke, and there's no longer a Claude prompt file for a
+  proposed rule to edit anyway. It runs silently on success (no email) and
+  only emails `SUMMARY_EMAIL` on failure.
 
-Not yet wired up as the live weekly trigger — see the README's setup and
-dry-run steps before cutting over from `legal-tracker-triage`'s own
-schedule.
+Not yet wired up as the live weekly triggers — see the README's setup and
+dry-run steps before cutting over from `legal-tracker-triage`'s and
+`legal-tracker-triage-review`'s own schedules.
 
 ## Skills
 

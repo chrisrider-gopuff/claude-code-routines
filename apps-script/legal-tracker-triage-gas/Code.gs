@@ -38,6 +38,24 @@
 //     spurious Cases/Internal Owners record — see createRecords_.
 //   - Reporting is email (MailApp, to SUMMARY_EMAIL) instead of Slack.
 //
+// This file also incorporates the *cleanup* half of the sibling
+// legal-tracker-triage-review Claude Code routine — deleting Update
+// Matches rows once they've been reviewed and either aged out (rejected)
+// or promoted into Case Activity (approved) — as runCleanup(), on its own
+// trigger. The *learning* half of that routine (clustering rejection/
+// approval patterns and proposing prompt.md rule changes as GitHub PRs)
+// is deliberately NOT ported: legal-tracker-triage now runs weekly instead
+// of daily, so a single Update Matches row can synthesize several distinct
+// messages into one Entry — the clean one-event-per-row signal that
+// pattern's approve/reject clustering depended on no longer exists, and
+// there is no longer a Claude prompt.md for a proposed rule to edit
+// anyway. runCleanup() is pure bookkeeping: no Gemini calls, no state
+// file, no GitHub access, nothing to persist between runs. It also sends
+// no summary email on success by design — only failures email
+// SUMMARY_EMAIL, via the same fail-closed pattern as the rest of this
+// script, so a broken cleanup doesn't fail silently forever even though a
+// working one is silent.
+//
 // Every setting this script uses lives in Script Properties (Project
 // Settings -> Script Properties) — nothing operational is hardcoded below,
 // specifically so changing a base ID, a table name, or the trigger day
@@ -89,6 +107,14 @@
 //   TRIGGER_HOUR            7         — used only by installWeeklyTrigger();
 //                                      0-23, in the script's timeZone
 //                                      (appsscript.json — America/New_York)
+//   CLEANUP_NOT_APPROVED_AGE_DAYS  21   — a Not Approved row is only
+//                                         deleted once its Activity Date
+//                                         is this many days old (margin
+//                                         against the triage routine's own
+//                                         dedup window re-logging the same
+//                                         thread — see runCleanup())
+//   CLEANUP_TRIGGER_WEEKDAY   SUNDAY  — used only by installCleanupTrigger()
+//   CLEANUP_TRIGGER_HOUR      20      — 0-23, script's timeZone
 //
 // Table-level field names expected in each table, checked live at the
 // start of every run (see verifySchema_) — not a Script Property, since
@@ -203,6 +229,105 @@ function installWeeklyTrigger() {
     'function to reschedule.');
 }
 
+// Deletes Update Matches rows that have already been reviewed and are done
+// with: a Not Approved row once it's safely aged out of the triage
+// routine's own re-scan window, or an Approved row once it's actually been
+// promoted into Case Activity (never by age — a pending Approved row is
+// left alone indefinitely). Pure bookkeeping: no Gemini calls, nothing to
+// persist between runs, and — by design — no email on a normal/successful
+// run. A failure still emails SUMMARY_EMAIL, same as everywhere else in
+// this script, so a broken cleanup doesn't go unnoticed indefinitely.
+function runCleanup() {
+  var cfg = getConfig_();
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    Logger.log('Another run is already in progress; exiting.');
+    return;
+  }
+
+  try {
+    var schemaProblems = verifySchema_(cfg);
+    if (schemaProblems.length) {
+      sendFailureEmail_(cfg, 'Airtable schema mismatch (cleanup)', schemaProblems.join('\n'));
+      return;
+    }
+
+    var updateMatchesRows, caseActivityRows;
+    try {
+      updateMatchesRows = listAllRecords_(cfg, cfg.tables.updateMatches,
+        ['Approved', 'Activity Date', 'Thread ID', 'Email Link']);
+      caseActivityRows = listAllRecords_(cfg, cfg.tables.caseActivity, ['Email Link']);
+    } catch (err) {
+      sendFailureEmail_(cfg, 'Failed to read Airtable for cleanup', err.message);
+      return;
+    }
+
+    var promotedThreadIds = {};
+    caseActivityRows.forEach(function (r) {
+      var tid = parseThreadIdFromEmailLink_(r.fields['Email Link']);
+      if (tid) promotedThreadIds[tid] = true;
+    });
+
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - cfg.cleanupNotApprovedAgeDays);
+
+    var toDelete = [];
+    updateMatchesRows.forEach(function (r) {
+      var approved = r.fields['Approved'];
+      if (approved === 'Not Approved') {
+        var activityDate = r.fields['Activity Date'] ? new Date(r.fields['Activity Date']) : null;
+        if (activityDate && activityDate <= cutoff) toDelete.push(r.id);
+        return;
+      }
+      if (approved === 'Approved') {
+        var threadId = r.fields['Thread ID'] || parseThreadIdFromEmailLink_(r.fields['Email Link']);
+        if (threadId && promotedThreadIds[threadId]) toDelete.push(r.id);
+      }
+      // Approved-but-not-yet-promoted and blank-Approved rows: left alone,
+      // regardless of age, same as the routine this replaces.
+    });
+
+    try {
+      deleteRecords_(cfg, cfg.tables.updateMatches, toDelete);
+    } catch (err) {
+      sendFailureEmail_(cfg, 'Failed to delete Update Matches rows during cleanup', err.message);
+      return;
+    }
+
+    Logger.log('Cleanup complete: deleted ' + toDelete.length + ' Update Matches row(s) ' +
+      '(see Executions log for details; no email is sent on a normal run).');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// One-time setup helper — run manually once from the Apps Script editor to
+// install the cleanup trigger. Safe to re-run: clears any existing trigger
+// on runCleanup() first so it never ends up double-scheduled.
+function installCleanupTrigger() {
+  var p = PropertiesService.getScriptProperties();
+  var weekdayName = (p.getProperty('CLEANUP_TRIGGER_WEEKDAY') || 'SUNDAY').toUpperCase();
+  var hour = parseInt(p.getProperty('CLEANUP_TRIGGER_HOUR') || '20', 10);
+  var weekday = ScriptApp.WeekDay[weekdayName];
+  if (!weekday) {
+    throw new Error('CLEANUP_TRIGGER_WEEKDAY "' + weekdayName + '" is not a valid day name (MONDAY..SUNDAY).');
+  }
+
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'runCleanup' && t.getEventType() === ScriptApp.EventType.CLOCK) {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+  ScriptApp.newTrigger('runCleanup')
+    .timeBased()
+    .onWeekDay(weekday)
+    .atHour(hour)
+    .create();
+  Logger.log('Installed: runCleanup() every ' + weekdayName + ' at ' + hour + ':00 America/New_York. ' +
+    'Change CLEANUP_TRIGGER_WEEKDAY/CLEANUP_TRIGGER_HOUR and re-run this function to reschedule.');
+}
+
 // ===== Config =====
 
 function getConfig_() {
@@ -236,7 +361,8 @@ function getConfig_() {
     reviewWindowDays: parseInt(p.getProperty('REVIEW_WINDOW_DAYS') || '14', 10),
     maxRuntimeMinutes: parseInt(p.getProperty('MAX_RUNTIME_MINUTES') || '25', 10),
     updateLabelName: p.getProperty('UPDATE_LABEL_NAME') || '!update',
-    dryRun: (p.getProperty('DRY_RUN') || 'false').toLowerCase() === 'true'
+    dryRun: (p.getProperty('DRY_RUN') || 'false').toLowerCase() === 'true',
+    cleanupNotApprovedAgeDays: parseInt(p.getProperty('CLEANUP_NOT_APPROVED_AGE_DAYS') || '21', 10)
   };
 }
 
@@ -296,6 +422,30 @@ function createRecords_(cfg, tableName, records) {
     // typecast:false — a bad linked-record value must fail loudly, never
     // silently mint a new Cases/Internal Owners record from a stray string.
     airtableRequest_(cfg, 'post', '/' + encodeURIComponent(tableName), { records: chunk, typecast: false });
+  }
+}
+
+function deleteRecords_(cfg, tableName, recordIds) {
+  // The only table this script is ever allowed to DELETE from, regardless
+  // of what any table-name property is set to — same defense-in-depth
+  // pattern as the write allowlist in createRecords_ above. Update Matches
+  // is a review queue rows are meant to be removed from once processed;
+  // every other table (Case Activity above all) is not.
+  var allowlist = [cfg.tables.updateMatches];
+  if (allowlist.indexOf(tableName) === -1) {
+    throw new Error('Refusing to delete from "' + tableName + '" — not in the delete allowlist (' +
+      allowlist.join(', ') + ').');
+  }
+  if (!recordIds.length) return;
+  if (cfg.dryRun) {
+    Logger.log('[DRY RUN] would delete from ' + tableName + ': ' + JSON.stringify(recordIds));
+    return;
+  }
+  var CHUNK = 10; // Airtable's delete endpoint caps at 10 record IDs per call
+  for (var i = 0; i < recordIds.length; i += CHUNK) {
+    var chunk = recordIds.slice(i, i + CHUNK);
+    var query = chunk.map(function (id) { return 'records[]=' + encodeURIComponent(id); }).join('&');
+    airtableRequest_(cfg, 'delete', '/' + encodeURIComponent(tableName) + '?' + query, null);
   }
 }
 
