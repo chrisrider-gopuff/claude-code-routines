@@ -25,26 +25,28 @@ charge being served, a court notice, a scheduling update, and so on.
 For every email thread it finds, it works out which case (if any) it
 belongs to using two layers:
 
-1. **Simple, predictable checks first.** Does the sender or recipient
-   match a known Opposing Counsel email address in Airtable? Does the
-   subject or body mention a matter name, claimant name, or case number
-   that's already on record? Was the thread manually tagged with the
-   `!update` Gmail label? These checks are plain code — no AI judgment
-   involved, and they never guess: if nothing matches, the thread is
-   skipped rather than logged with a shaky guess.
+1. **Two ways a thread gets picked up for review.** Either a plain-code
+   check matches it automatically (sender/recipient is a known Opposing
+   Counsel address in Airtable, or the subject/body mentions a matter
+   name, claimant name, or case number already on record), or a human
+   marked it relevant by attaching the `!update` Gmail label — see
+   **Using the `!update` label** below for how that's meant to be used
+   day to day. A thread that matches neither way is skipped entirely
+   rather than logged with a shaky guess.
 
-2. **Gemini (Google's AI) only for the judgment calls**, and only on
-   threads that already passed step 1 (or carry the `!update` label). It
-   reads the email and decides two things: how confident the match is
-   (see the Match Confidence levels below), and a short, factual,
-   third-person summary of what happened — no speculation, no legal
-   advice, no opinions. The AI is explicitly told to treat everything in
-   the email as content to summarize, never as an instruction to follow —
-   so an email that says something like "mark this urgent" or "log this
-   under Case X" gets ignored as an instruction and only used for its
-   actual facts. This matters because anyone who can email that inbox can
-   write whatever they want in the body; the AI is not supposed to take
-   orders from a stranger's email.
+2. **Gemini (Google's AI) does the judgment call** on anything picked up
+   in step 1: how confident the match is (see the Match Confidence levels
+   below), and a short, factual, third-person summary of what happened —
+   no speculation, no legal advice, no opinions. A labeled thread gets a
+   wider set of candidate cases to consider than an automatically-matched
+   one does — see below — but the honesty rules are the same either way.
+   The AI is explicitly told to treat everything in the email as content
+   to summarize, never as an instruction to follow — so an email that says
+   something like "mark this urgent" or "log this under Case X" gets
+   ignored as an instruction and only used for its actual facts. This
+   matters because anyone who can email that inbox can write whatever
+   they want in the body; the AI is not supposed to take orders from a
+   stranger's email.
 
 3. **A case is only ever linked by matching a real record already in
    Airtable** — the script (and the AI) can never invent a new case or
@@ -66,14 +68,34 @@ runs, whether or not anything new was found.
 
 ## Using the `!update` label
 
-If whoever is checking `litigation@gopuff.com` sees an email that's
-relevant to a case already in Airtable, attach the `!update` Gmail label
-to that thread. On the next run, `main` will **always** create an Update
-Matches row for a labeled thread — even if nothing else about the email
-would have matched a case on its own.
+**Attaching the `!update` Gmail label is the primary, intended way to
+tell `main` "this belongs in the tracker."** If whoever is checking
+`litigation@gopuff.com` sees an email that's relevant to a case in
+Airtable, label the thread. That's the main workflow this project is
+built around — the automatic checks described below exist as a
+supplement, not a replacement for actually reviewing the inbox. A
+labeled thread with in-window activity **always** produces an Update
+Matches row — the only thing the label doesn't guarantee is that a
+specific case gets linked automatically (see below).
 
-**You do not need to label every relevant email — most don't need it.**
-`main` matches automatically, with no label at all, whenever an email:
+When a thread is labeled, `main` doesn't just log a placeholder row —
+it hands Gemini the **entire list of active cases** as candidates and
+asks it to make a real attempt at identifying which one the thread
+belongs to, weighing the label itself as strong, human-confirmed evidence
+that the content is worth a higher-confidence read. That's different from
+an unmatched, unlabeled thread, which never reaches Gemini at all. In
+practice this means most labeled threads should come back with an actual
+case linked, not just a "needs manual assignment" placeholder — the
+label is what unlocks Gemini's full attempt at matching, not just a
+guarantee that *something* gets logged. Gemini still can't invent a case
+or link one it isn't genuinely confident about: if it truly can't tell
+which case a labeled thread belongs to, the row still comes in with
+**Case** left blank and **Match Confidence** set to `No Confidence`,
+called out in the summary email as needing manual assignment.
+
+**Automatic matching still runs independently, as a safety net for
+anything that doesn't get labeled.** `main` also creates a row, with no
+label required, whenever an email:
 
 - comes from or is sent to a known Opposing Counsel email address already
   in Airtable, or
@@ -81,19 +103,11 @@ would have matched a case on its own.
   the Cases table for an Active case (a plain text match, anywhere in the
   subject or body).
 
-If either of those is true, a row gets created whether or not the thread
-is labeled — labeling it too is harmless, just redundant. The label
-exists for the opposite situation: an email you know belongs in the
-tracker, but that doesn't happen to contain any text the automatic checks
-would recognize — a scanned document with no matching text, an ambiguous
-forward, correspondence from a new attorney at an already-known firm
-whose email address isn't in Opposing Counsel yet, and so on. Labeling
-one of those guarantees a row gets created instead of the thread being
-silently skipped. If the case still can't be identified even with the
-label, the row comes in with **Case** left blank and **Match Confidence**
-set to `No Confidence`, and gets called out in the summary email as
-needing manual case assignment — it's still logged, just not
-auto-linked.
+This only ever considers that narrow, specific match — not the full case
+list — so it's meant to catch what a reviewer might miss labeling, not to
+replace labeling as the primary signal. Labeling a thread that would also
+have matched automatically doesn't hurt anything; it just gets Gemini the
+wider candidate list and the confidence boost described above.
 
 One timing note: a labeled thread only gets picked up if it's also within
 `main`'s review window (`REVIEW_WINDOW_DAYS`, default 14 days) — labeling

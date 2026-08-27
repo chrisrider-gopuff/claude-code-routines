@@ -256,10 +256,17 @@ Differences from the Claude Code routine, in brief (full rationale in
 - **Gemini (`gemini-2.5-flash` by default) replaces Claude's reasoning**
   for the judgment calls — match confidence, drafting the `Entry` text,
   and resisting prompt injection in swept email content — via narrow,
-  schema-constrained calls. Candidate case matching itself stays
-  deterministic code (mirrors the routine's own (a)-(d) rules), and
-  Gemini's output is re-validated against the real candidate ID list
-  before anything is written.
+  schema-constrained calls, and Gemini's output is re-validated against
+  the real candidate ID list before anything is written. Which candidates
+  it's handed depends on how the thread was found: an unlabeled thread
+  only gets the narrow set found by deterministic code (mirrors the
+  routine's own (a)-(c) rules — Opposing Counsel email, matter/claimant/
+  case-number text match); a thread carrying the `!update` Gmail label is
+  treated as the primary signal, not a fallback — it gets every active
+  case as a candidate so Gemini can make a real attempt at identifying
+  the match, rather than being limited to a guaranteed-blank row. Only a
+  human applying the label can widen the candidate pool this way, never
+  the email content itself.
 - **GmailApp gives full thread bodies natively**, so the search-preview
   truncation workaround in the Claude Code routine's Step 3 isn't needed
   here.
