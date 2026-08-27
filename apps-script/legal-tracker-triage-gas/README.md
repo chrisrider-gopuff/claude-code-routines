@@ -64,6 +64,41 @@ stops itself rather than pushing ahead with a guess, and always sends an
 email explaining what happened. You should get an email every time `main`
 runs, whether or not anything new was found.
 
+## Using the `!update` label
+
+If whoever is checking `litigation@gopuff.com` sees an email that's
+relevant to a case already in Airtable, attach the `!update` Gmail label
+to that thread. On the next run, `main` will **always** create an Update
+Matches row for a labeled thread — even if nothing else about the email
+would have matched a case on its own.
+
+**You do not need to label every relevant email — most don't need it.**
+`main` matches automatically, with no label at all, whenever an email:
+
+- comes from or is sent to a known Opposing Counsel email address already
+  in Airtable, or
+- mentions a matter name, Matter ID, or claimant name that's already in
+  the Cases table for an Active case (a plain text match, anywhere in the
+  subject or body).
+
+If either of those is true, a row gets created whether or not the thread
+is labeled — labeling it too is harmless, just redundant. The label
+exists for the opposite situation: an email you know belongs in the
+tracker, but that doesn't happen to contain any text the automatic checks
+would recognize — a scanned document with no matching text, an ambiguous
+forward, correspondence from a new attorney at an already-known firm
+whose email address isn't in Opposing Counsel yet, and so on. Labeling
+one of those guarantees a row gets created instead of the thread being
+silently skipped. If the case still can't be identified even with the
+label, the row comes in with **Case** left blank and **Match Confidence**
+set to `No Confidence`, and gets called out in the summary email as
+needing manual case assignment — it's still logged, just not
+auto-linked.
+
+One timing note: a labeled thread only gets picked up if it's also within
+`main`'s review window (`REVIEW_WINDOW_DAYS`, default 14 days) — labeling
+an older thread that's already aged out of that window won't surface it.
+
 ## How Update Matches and Case Activity fit together
 
 These two Airtable tables work together as a **draft-then-approve**
