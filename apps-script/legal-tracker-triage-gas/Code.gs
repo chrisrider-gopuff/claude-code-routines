@@ -30,20 +30,32 @@
 //   - Airtable access is a direct REST call with its own API key (Script
 //     Properties), not the airtable-mcp proxy this repo also has. That
 //     means there is no server-side backstop stopping a write to a table
-//     other than Update Matches/Thread Matches — WRITE_TABLE_ALLOWLIST
-//     below is the only thing enforcing that, so treat it as load-bearing.
+//     other than Update Matches/Thread Matches — the allowlist check inside
+//     createRecords_ is the only thing enforcing that, so treat it as
+//     load-bearing.
 //     Every create call is also sent with typecast:false, so a bad string
 //     in a linked-record field fails loudly instead of silently minting a
 //     spurious Cases/Internal Owners record — see createRecords_.
 //   - Reporting is email (MailApp, to SUMMARY_EMAIL) instead of Slack.
 //
-// Required Script Properties (Project Settings -> Script Properties):
-//   AIRTABLE_API_KEY   — Legal Tracker base PAT. Scope it to base
-//                        appFIB9fJCzTeFDcG only, with data.records:read,
-//                        data.records:write, and schema.bases:read (the
-//                        last is required for verifySchema_'s startup
-//                        check) — no delete scope, this script never
-//                        deletes anything and shouldn't be able to.
+// Every setting this script uses lives in Script Properties (Project
+// Settings -> Script Properties) — nothing operational is hardcoded below,
+// specifically so changing a base ID, a table name, or the trigger day
+// never requires opening this file. The only things that live in code are
+// the Airtable *field* names inside each table (e.g. "Match Confidence",
+// "Entry") — those are load-bearing against the write/read logic itself,
+// not settings, and verifySchema_ checks them against the live base on
+// every run so a mismatch fails loudly instead of writing to the wrong
+// field silently.
+//
+// Required Script Properties:
+//   AIRTABLE_API_KEY   — Legal Tracker base PAT. Scope it to the base you
+//                        set in AIRTABLE_BASE_ID only, with
+//                        data.records:read, data.records:write, and
+//                        schema.bases:read (the last is required for
+//                        verifySchema_'s startup check) — no delete scope,
+//                        this script never deletes anything and shouldn't
+//                        be able to.
 //   GEMINI_API_KEY     — Gemini API key.
 //   AUTHOR_OWNER_NAME  — exact "Name" of the Internal Owners record to link
 //                        as Author on every row this script writes. There
@@ -53,33 +65,42 @@
 //                        silently falling back to a departed person's name
 //                        — see README.md.
 // Optional Script Properties (defaults shown):
-//   GEMINI_MODEL          gemini-2.5-flash
-//   SUMMARY_EMAIL         legal@gopuff.com
-//   REVIEW_WINDOW_DAYS    14
-//   MAX_RUNTIME_MINUTES   25   (Workspace trigger cap is 30; leaves headroom)
-//   UPDATE_LABEL_NAME     !update
-//   DRY_RUN               false  — "true" logs what would be written
-//                                  instead of calling Airtable's write
-//                                  endpoints; still runs the full match/
-//                                  classify pipeline and sends the summary
-//                                  email, so you can sanity-check a run
-//                                  before trusting it with the live base.
-
-var BASE_ID = 'appFIB9fJCzTeFDcG';
-
-var TABLES = {
-  CASES: 'Cases',
-  OPPOSING_COUNSEL: 'Opposing Counsel',
-  UPDATE_MATCHES: 'Update Matches',
-  CASE_ACTIVITY: 'Case Activity',
-  THREAD_MATCHES: 'Thread Matches',
-  INTERNAL_OWNERS: 'Internal Owners'
+//   AIRTABLE_BASE_ID       appFIB9fJCzTeFDcG   (Legal Tracker)
+//   TABLE_CASES            Cases
+//   TABLE_OPPOSING_COUNSEL Opposing Counsel
+//   TABLE_UPDATE_MATCHES   Update Matches
+//   TABLE_CASE_ACTIVITY    Case Activity
+//   TABLE_THREAD_MATCHES   Thread Matches
+//   TABLE_INTERNAL_OWNERS  Internal Owners
+//   GEMINI_MODEL           gemini-2.5-flash
+//   SUMMARY_EMAIL          legal@gopuff.com
+//   REVIEW_WINDOW_DAYS     14
+//   MAX_RUNTIME_MINUTES    25   (Workspace trigger cap is 30; leaves headroom)
+//   UPDATE_LABEL_NAME      !update
+//   DRY_RUN                false  — "true" logs what would be written
+//                                   instead of calling Airtable's write
+//                                   endpoints; still runs the full match/
+//                                   classify pipeline and sends the summary
+//                                   email, so you can sanity-check a run
+//                                   before trusting it with the live base.
+//   TRIGGER_WEEKDAY        SATURDAY  — used only by installWeeklyTrigger();
+//                                      any ScriptApp.WeekDay name
+//                                      (MONDAY..SUNDAY)
+//   TRIGGER_HOUR            7         — used only by installWeeklyTrigger();
+//                                      0-23, in the script's timeZone
+//                                      (appsscript.json — America/New_York)
+//
+// Table-level field names expected in each table, checked live at the
+// start of every run (see verifySchema_) — not a Script Property, since
+// these describe the write/read logic itself rather than a setting:
+var EXPECTED_FIELDS = {
+  cases: ['Matter', 'Status', 'Matter ID', 'Claimant Name'],
+  opposingCounsel: ['Firm Name', 'Primary Contact Email', 'Cases'],
+  updateMatches: ['Case', 'Activity Date', 'Entry', 'Entry Type', 'Email Link', 'Match Confidence', 'Thread ID', 'Author', 'Approved'],
+  caseActivity: ['Case', 'Activity Date', 'Entry', 'Email Link'],
+  threadMatches: ['Thread ID', 'Cases', 'Matter Name', 'Entry Snippet', 'Created At'],
+  internalOwners: ['Name']
 };
-
-// The only tables this script is ever allowed to POST to. Checked in code,
-// not just documented, because there is no Airtable-side tier enforcement
-// on a direct-REST API key the way there is behind the airtable-mcp proxy.
-var WRITE_TABLE_ALLOWLIST = [TABLES.UPDATE_MATCHES, TABLES.THREAD_MATCHES];
 
 // ===== Entry points =====
 
@@ -159,6 +180,14 @@ function main() {
 // install the weekly trigger. Safe to re-run: clears any existing trigger
 // on main() first so it never ends up double-scheduled.
 function installWeeklyTrigger() {
+  var p = PropertiesService.getScriptProperties();
+  var weekdayName = (p.getProperty('TRIGGER_WEEKDAY') || 'SATURDAY').toUpperCase();
+  var hour = parseInt(p.getProperty('TRIGGER_HOUR') || '7', 10);
+  var weekday = ScriptApp.WeekDay[weekdayName];
+  if (!weekday) {
+    throw new Error('TRIGGER_WEEKDAY "' + weekdayName + '" is not a valid day name (MONDAY..SUNDAY).');
+  }
+
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'main' && t.getEventType() === ScriptApp.EventType.CLOCK) {
       ScriptApp.deleteTrigger(t);
@@ -166,10 +195,12 @@ function installWeeklyTrigger() {
   });
   ScriptApp.newTrigger('main')
     .timeBased()
-    .onWeekDay(ScriptApp.WeekDay.SATURDAY)
-    .atHour(7)
+    .onWeekDay(weekday)
+    .atHour(hour)
     .create();
-  Logger.log('Installed: main() every Saturday at 7am America/New_York (script timeZone in appsscript.json).');
+  Logger.log('Installed: main() every ' + weekdayName + ' at ' + hour + ':00 America/New_York ' +
+    '(script timeZone in appsscript.json). Change TRIGGER_WEEKDAY/TRIGGER_HOUR and re-run this ' +
+    'function to reschedule.');
 }
 
 // ===== Config =====
@@ -190,6 +221,15 @@ function getConfig_() {
   return {
     airtableApiKey: airtableApiKey,
     geminiApiKey: geminiApiKey,
+    baseId: p.getProperty('AIRTABLE_BASE_ID') || 'appFIB9fJCzTeFDcG',
+    tables: {
+      cases: p.getProperty('TABLE_CASES') || 'Cases',
+      opposingCounsel: p.getProperty('TABLE_OPPOSING_COUNSEL') || 'Opposing Counsel',
+      updateMatches: p.getProperty('TABLE_UPDATE_MATCHES') || 'Update Matches',
+      caseActivity: p.getProperty('TABLE_CASE_ACTIVITY') || 'Case Activity',
+      threadMatches: p.getProperty('TABLE_THREAD_MATCHES') || 'Thread Matches',
+      internalOwners: p.getProperty('TABLE_INTERNAL_OWNERS') || 'Internal Owners'
+    },
     geminiModel: p.getProperty('GEMINI_MODEL') || 'gemini-2.5-flash',
     summaryEmail: p.getProperty('SUMMARY_EMAIL') || 'legal@gopuff.com',
     authorOwnerName: authorOwnerName,
@@ -203,7 +243,7 @@ function getConfig_() {
 // ===== Airtable REST layer =====
 
 function airtableRequest_(cfg, method, path, payload) {
-  var url = 'https://api.airtable.com/v0/' + BASE_ID + path;
+  var url = 'https://api.airtable.com/v0/' + cfg.baseId + path;
   var options = {
     method: method,
     headers: { Authorization: 'Bearer ' + cfg.airtableApiKey },
@@ -235,9 +275,16 @@ function listAllRecords_(cfg, tableName, fieldNames) {
 }
 
 function createRecords_(cfg, tableName, records) {
-  if (WRITE_TABLE_ALLOWLIST.indexOf(tableName) === -1) {
-    throw new Error('Refusing to write to "' + tableName + '" — not in WRITE_TABLE_ALLOWLIST (' +
-      WRITE_TABLE_ALLOWLIST.join(', ') + ').');
+  // The only tables this script is ever allowed to POST to, derived from
+  // config rather than a separate hardcoded list — but still only these
+  // two roles, never anything else, regardless of what the table-name
+  // properties are set to. Checked in code, not just documented, because
+  // there is no Airtable-side tier enforcement on a direct-REST API key
+  // the way there is behind the airtable-mcp proxy.
+  var allowlist = [cfg.tables.updateMatches, cfg.tables.threadMatches];
+  if (allowlist.indexOf(tableName) === -1) {
+    throw new Error('Refusing to write to "' + tableName + '" — not in the write allowlist (' +
+      allowlist.join(', ') + ').');
   }
   if (cfg.dryRun) {
     Logger.log('[DRY RUN] would create in ' + tableName + ': ' + JSON.stringify(records));
@@ -253,7 +300,7 @@ function createRecords_(cfg, tableName, records) {
 }
 
 function verifySchema_(cfg) {
-  var url = 'https://api.airtable.com/v0/meta/bases/' + BASE_ID + '/tables';
+  var url = 'https://api.airtable.com/v0/meta/bases/' + cfg.baseId + '/tables';
   var data = withRetry_(function () {
     var resp = UrlFetchApp.fetch(url, {
       headers: { Authorization: 'Bearer ' + cfg.airtableApiKey },
@@ -268,22 +315,15 @@ function verifySchema_(cfg) {
   var byName = {};
   data.tables.forEach(function (t) { byName[t.name] = t; });
 
-  var expected = {};
-  expected[TABLES.CASES] = ['Matter', 'Status', 'Matter ID', 'Claimant Name'];
-  expected[TABLES.OPPOSING_COUNSEL] = ['Firm Name', 'Primary Contact Email', 'Cases'];
-  expected[TABLES.UPDATE_MATCHES] = ['Case', 'Activity Date', 'Entry', 'Entry Type', 'Email Link', 'Match Confidence', 'Thread ID', 'Author', 'Approved'];
-  expected[TABLES.CASE_ACTIVITY] = ['Case', 'Activity Date', 'Entry', 'Email Link'];
-  expected[TABLES.THREAD_MATCHES] = ['Thread ID', 'Cases', 'Matter Name', 'Entry Snippet', 'Created At'];
-  expected[TABLES.INTERNAL_OWNERS] = ['Name'];
-
   var problems = [];
-  Object.keys(expected).forEach(function (tableName) {
-    var table = byName[tableName];
-    if (!table) { problems.push('Table "' + tableName + '" not found in base.'); return; }
+  Object.keys(EXPECTED_FIELDS).forEach(function (key) {
+    var actualName = cfg.tables[key];
+    var table = byName[actualName];
+    if (!table) { problems.push('Table "' + actualName + '" (configured for ' + key + ') not found in base.'); return; }
     var fieldNames = table.fields.map(function (f) { return f.name; });
-    expected[tableName].forEach(function (fieldName) {
+    EXPECTED_FIELDS[key].forEach(function (fieldName) {
       if (fieldNames.indexOf(fieldName) === -1) {
-        problems.push('Field "' + fieldName + '" not found in table "' + tableName + '".');
+        problems.push('Field "' + fieldName + '" not found in table "' + actualName + '" (' + key + ').');
       }
     });
   });
@@ -293,7 +333,7 @@ function verifySchema_(cfg) {
 // ===== Matching context =====
 
 function loadMatchingContext_(cfg) {
-  var caseRecords = listAllRecords_(cfg, TABLES.CASES, ['Matter', 'Status', 'Matter ID', 'Claimant Name']);
+  var caseRecords = listAllRecords_(cfg, cfg.tables.cases, ['Matter', 'Status', 'Matter ID', 'Claimant Name']);
   var allCasesById = {};
   var activeCases = [];
   caseRecords.forEach(function (r) {
@@ -307,7 +347,7 @@ function loadMatchingContext_(cfg) {
     if (r.fields['Status'] === 'Active') activeCases.push(c);
   });
 
-  var counselRecords = listAllRecords_(cfg, TABLES.OPPOSING_COUNSEL, ['Firm Name', 'Primary Contact Email', 'Cases']);
+  var counselRecords = listAllRecords_(cfg, cfg.tables.opposingCounsel, ['Firm Name', 'Primary Contact Email', 'Cases']);
   var counselList = counselRecords.map(function (r) {
     return {
       firmName: r.fields['Firm Name'] || '',
@@ -316,7 +356,7 @@ function loadMatchingContext_(cfg) {
     };
   });
 
-  var threadMatchRecords = listAllRecords_(cfg, TABLES.THREAD_MATCHES, ['Thread ID', 'Cases', 'Matter Name']);
+  var threadMatchRecords = listAllRecords_(cfg, cfg.tables.threadMatches, ['Thread ID', 'Cases', 'Matter Name']);
   var threadMatchMap = {};
   threadMatchRecords.forEach(function (r) {
     var tid = r.fields['Thread ID'];
@@ -334,15 +374,15 @@ function loadMatchingContext_(cfg) {
     });
   }
   absorb(
-    listAllRecords_(cfg, TABLES.UPDATE_MATCHES, ['Thread ID', 'Activity Date']),
+    listAllRecords_(cfg, cfg.tables.updateMatches, ['Thread ID', 'Activity Date']),
     function (r) { return r.fields['Thread ID']; }
   );
   absorb(
-    listAllRecords_(cfg, TABLES.CASE_ACTIVITY, ['Email Link', 'Activity Date']),
+    listAllRecords_(cfg, cfg.tables.caseActivity, ['Email Link', 'Activity Date']),
     function (r) { return parseThreadIdFromEmailLink_(r.fields['Email Link']); }
   );
 
-  var ownerRecords = listAllRecords_(cfg, TABLES.INTERNAL_OWNERS, ['Name']);
+  var ownerRecords = listAllRecords_(cfg, cfg.tables.internalOwners, ['Name']);
   var authorRecord = ownerRecords.filter(function (r) { return r.fields['Name'] === cfg.authorOwnerName; })[0];
   if (!authorRecord) {
     throw new Error('No Internal Owners record named "' + cfg.authorOwnerName +
@@ -633,7 +673,7 @@ function writeUpdateMatchRow_(cfg, context, thread, messages, classification) {
     'Author': [context.authorRecordId]
   };
   if (classification.matchedCaseIds.length) fields['Case'] = classification.matchedCaseIds;
-  createRecords_(cfg, TABLES.UPDATE_MATCHES, [{ fields: fields }]);
+  createRecords_(cfg, cfg.tables.updateMatches, [{ fields: fields }]);
 }
 
 function writeThreadMatchRow_(cfg, context, thread, classification) {
@@ -644,7 +684,7 @@ function writeThreadMatchRow_(cfg, context, thread, classification) {
     'Entry Snippet': truncate_(classification.entryText, 500),
     'Created At': Utilities.formatDate(new Date(), 'America/New_York', 'yyyy-MM-dd')
   };
-  createRecords_(cfg, TABLES.THREAD_MATCHES, [{ fields: fields }]);
+  createRecords_(cfg, cfg.tables.threadMatches, [{ fields: fields }]);
 }
 
 // ===== Reporting =====
