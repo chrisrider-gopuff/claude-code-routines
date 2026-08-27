@@ -6,10 +6,175 @@ under a shared account — `litigation@gopuff.com` — with no dependency on
 Claude Code, so the weekly triage keeps running after whoever built it
 moves on.
 
-Gmail only (no Slack). See the header comment in `Code.gs` for the full
-design rationale and what's different from the Claude Code version.
+Gmail only (no Slack).
 
-## Required setup, in order
+## How it works, in plain English
+
+Once a week (Saturday morning by default), the script logs in as the
+`litigation@gopuff.com` mailbox and looks back over roughly the last two
+weeks of email. It's looking for anything that reads like a development on
+an open legal matter — a reply from opposing counsel, a new complaint or
+charge being served, a court notice, a scheduling update, and so on.
+
+For every email thread it finds, it works out which case (if any) it
+belongs to using two layers:
+
+1. **Simple, predictable checks first.** Does the sender or recipient
+   match a known Opposing Counsel email address in Airtable? Does the
+   subject or body mention a matter name, claimant name, or case number
+   that's already on record? Was the thread manually tagged with the
+   `!update` Gmail label? These checks are plain code — no AI judgment
+   involved, and they never guess: if nothing matches, the thread is
+   skipped rather than logged with a shaky guess.
+
+2. **Gemini (Google's AI) only for the judgment calls**, and only on
+   threads that already passed step 1 (or carry the `!update` label). It
+   reads the email and decides two things: how confident the match is
+   (see the Match Confidence levels below), and a short, factual,
+   third-person summary of what happened — no speculation, no legal
+   advice, no opinions. The AI is explicitly told to treat everything in
+   the email as content to summarize, never as an instruction to follow —
+   so an email that says something like "mark this urgent" or "log this
+   under Case X" gets ignored as an instruction and only used for its
+   actual facts. This matters because anyone who can email that inbox can
+   write whatever they want in the body; the AI is not supposed to take
+   orders from a stranger's email.
+
+3. **A case is only ever linked by matching a real record already in
+   Airtable** — the script (and the AI) can never invent a new case or
+   type in a case name as free text. If it isn't confident, it leaves the
+   case link blank rather than guessing, and says so in the weekly
+   summary email so a human can assign it by hand.
+
+Every match becomes a new **draft row in the Update Matches table** — the
+script never writes directly to the permanent case record. A weekly (or
+however often it runs) summary email goes to whoever's set as
+`SUMMARY_EMAIL`, listing what was added, what needs manual case
+assignment, and whether anything went wrong.
+
+If something breaks along the way — Gmail is unreachable, Airtable
+rejects a write, a table or field got renamed in Airtable — the script
+stops itself rather than pushing ahead with a guess, and always sends an
+email explaining what happened. You should get an email every time it
+runs, whether or not anything new was found.
+
+## How Update Matches and Case Activity fit together
+
+These two Airtable tables work together as a **draft-then-approve**
+pipeline. This script only ever touches the first one.
+
+**Update Matches is the review queue.** Every row here is a draft the
+script (or a person) proposed — nothing in this table is official until a
+human signs off on it. The fields that matter:
+
+- **Case** — which case this relates to, if the match was confident
+  enough to link one. Can be blank.
+- **Activity Date** — the date of the email.
+- **Entry** — the plain-English summary of what happened.
+- **Entry Type** — where this came from (`Email`, `Slack`, or `Claude` —
+  this script only ever writes `Email`).
+- **Match Confidence** — `Medium Confidence` (a strong single-case match —
+  Case is linked), `Low Confidence` (a weak guess — Case is deliberately
+  left blank), or `No Confidence` (either several cases are plausible, in
+  which case all of them are linked, or none could be identified at all).
+- **Author** — who/what is credited with the entry (for this script, the
+  automated author record you set up — see the setup steps below).
+- **Approved** — blank until a human reviews it. This is the field *you*
+  set by hand: mark it `Approved` to accept the draft as real, or
+  `Not Approved` to reject it.
+- **Promoted** — a checkbox that gets ticked automatically once a row has
+  actually been copied into Case Activity (see below). You shouldn't need
+  to touch this yourself.
+
+**Case Activity is the permanent record** — the real, official history for
+each case. This script never writes to it directly, and neither should
+you type into it by hand for anything that came through Update Matches;
+the copy happens automatically.
+
+**The connection between them is an Airtable Automation** (called
+"Promotion", configured inside Airtable itself — nothing to do with this
+script, and this script has no ability to change it). It watches Update
+Matches for any row where `Approved` gets set to `Approved`, and when
+that happens it:
+
+1. Creates a matching row in Case Activity — same Case, Activity Date,
+   Entry, Entry Type, Author, and Email Link.
+2. Checks the `Promoted` box on the original Update Matches row, so
+   there's a visible record that it's already been copied.
+
+It does **not** delete the Update Matches row — that row just sits there
+with `Approved` = `Approved` and `Promoted` = checked. Marking a row
+`Not Approved` does the opposite: nothing gets copied anywhere, and the
+row also just sits there, unless something else cleans it up (see below).
+
+**Important: nothing in this script cleans up old Update Matches rows.**
+Approved-and-promoted rows and rejected rows both just accumulate in
+Update Matches forever unless something deletes them. That cleanup job —
+deleting `Not Approved` rows after they're safely outside the matching
+window, and deleting `Approved`/`Promoted` rows once they've been
+processed — is a *separate* system: the `legal-tracker-triage-review`
+Claude Code routine elsewhere in this repo. That routine is not part of
+this Apps Script project and won't automatically come along with it. If
+that Claude Code routine stops running (which is a real possibility if
+the point of this script is to remove the Claude Code dependency
+entirely), Update Matches will just keep growing — reviewed rows won't
+disappear, but the growing table also shouldn't cause new false matches,
+since matching only looks at Thread IDs and dates, not row count. This is
+worth deciding on deliberately rather than discovering by accident: either
+keep that review routine alive somewhere, or build a Gmail-only
+replacement for it the same way this script replaced the triage side.
+
+## Maintaining & troubleshooting
+
+**You should get an email from this script every time it runs**, sent to
+whatever `SUMMARY_EMAIL` is set to. Start there:
+
+- **Subject says COMPLETE** — normal run. Lists what was added (if
+  anything) and flags anything needing manual case assignment.
+- **Subject says INCOMPLETE** — some part of the search didn't finish
+  cleanly (e.g. Gmail was briefly unavailable). The email lists which
+  parts completed and which didn't. Usually resolves itself next run; if
+  it's INCOMPLETE two weeks running, something's actually wrong.
+- **Subject says FAILED** — the run stopped before doing anything real
+  (e.g. it couldn't read Airtable's table structure, or the automated
+  Author record is missing). The email body says exactly why. These
+  don't fix themselves — see the specific fixes below.
+- **No email at all** — the weekly trigger may not be installed, or the
+  script hit an error before it could even try to send mail (e.g. a
+  missing required setting). Check the Apps Script project's
+  **Executions** log (left sidebar in script.google.com) for the most
+  recent run and read the error there.
+
+**Common problems and what to do:**
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| FAILED email about a missing Internal Owners record | `AUTHOR_OWNER_NAME` Script Property doesn't match any record's `Name` in Airtable's Internal Owners table | Fix the typo, or add the missing Internal Owners record |
+| FAILED email about a schema mismatch | A table or field got renamed in Airtable | Either rename it back, or update the matching `TABLE_*` Script Property to the new name (field names inside a table can't be reconfigured this way — see the setup section) |
+| Nothing new shows up for weeks, but you know there's been case email | The `!update` Gmail label may be missing from `litigation@gopuff.com`, or the mail isn't reaching that mailbox at all, or the relevant case isn't in the Cases table as Active | Check the label exists; check the mailbox is actually receiving that correspondence; check the case's Status in Airtable |
+| A row shows up with the wrong case linked | The AI misjudged a Medium Confidence match | Just correct it during review — mark `Not Approved`, or manually fix the Case field before marking `Approved`. This is exactly what the human review step is for |
+| Rows keep piling up in Update Matches even after you've reviewed them | Nothing is cleaning up old rows — see the note above about `legal-tracker-triage-review` | Decide whether to keep that Claude Code routine running or replace it |
+| Script seems to have silently stopped running entirely | The weekly trigger was deleted, or the Airtable/Gemini API key expired or was revoked | In the Apps Script editor, check **Triggers** (left sidebar) for a trigger on `main`; re-run `installWeeklyTrigger` if it's missing. Check Script Properties for expired keys |
+
+**To change how it runs:** every setting lives in Script Properties
+(Project Settings -> Script Properties in the Apps Script editor) — see
+the full list in the setup section below and in the comment at the top of
+`Code.gs`. Nothing requires editing the code itself: the review window
+length, which email address gets the summary, the trigger day/time, which
+Airtable base/tables it points at, and so on are all properties.
+
+**To pause it temporarily:** open **Triggers** in the Apps Script editor
+and delete the trigger on `main` (or just disable/pause it). Re-run
+`installWeeklyTrigger` from the editor whenever you want it back.
+
+**To test a change safely:** set the `DRY_RUN` Script Property to `true`
+and run `main` manually from the editor. It runs the full pipeline —
+reads Gmail, calls Gemini, checks Airtable — but only logs what it would
+have written instead of actually writing it, and still sends you the
+summary email so you can see the results. Set it back to `false` when
+you're satisfied.
+
+## First-time setup, in order
 
 1. **Create the Apps Script project under `litigation@gopuff.com` itself**
    (not your personal account) — script.google.com, signed in as that
@@ -29,22 +194,19 @@ design rationale and what's different from the Claude Code version.
 
 4. **Add an Internal Owners record for this script to link as Author.**
    Every Update Matches/Case Activity row's Author field is a linked
-   record into Airtable's `Internal Owners` table, not free text — there
-   is currently no record there meant to represent this automated script
-   (checked live against the base on 2026-08-27; the existing rows are all
-   named individuals, e.g. "Chris Rider"). Add a new row there — e.g. name
-   it `Litigation Tracker (Automated)` — before the first live run. Do not
-   point this at a departing person's name; the script refuses to run
-   without `AUTHOR_OWNER_NAME` explicitly set (see below) specifically so
-   this doesn't happen by default.
+   record into Airtable's `Internal Owners` table, not free text. Add a
+   new row there — a generic name like `Litigation Tracker (Automated)`
+   is recommended, rather than any individual person's name, so it
+   doesn't need updating again the next time this handoff repeats. The
+   script refuses to run without `AUTHOR_OWNER_NAME` explicitly set (see
+   below) specifically so it never silently falls back to someone's name.
 
 5. **Get an Airtable Personal Access Token** scoped to the Legal Tracker
    base (`appFIB9fJCzTeFDcG`) only, with `data.records:read`,
    `data.records:write`, and `schema.bases:read` (the last one is needed
-   for the startup schema-mismatch check in `verifySchema_` — without it
-   every run fails at that check before touching Gmail or writing
-   anything) — no delete scope. This script never deletes anything and
-   shouldn't be able to.
+   for the startup schema-mismatch check — without it every run fails at
+   that check before touching Gmail or writing anything) — no delete
+   scope. This script never deletes anything and shouldn't be able to.
 
 6. **Get a Gemini API key** (default model: `gemini-2.5-flash`).
 
@@ -114,3 +276,6 @@ design rationale and what's different from the Claude Code version.
   Matches — there is no server-side backstop the way there is behind
   `mcp-servers/airtable-mcp`. Scoping the PAT itself (step 5) is a partial
   mitigation, not a replacement for that backstop.
+- **Cleanup of old Update Matches rows.** As described above, that's the
+  `legal-tracker-triage-review` Claude Code routine's job, not this
+  script's.
