@@ -1,15 +1,18 @@
 # legal-tracker-triage-gas
 
-A standalone Google Apps Script + Gemini implementation of
-`routines/legal-tracker-triage` (the Claude Code routine), built to run
-under a shared account — `litigation@gopuff.com` — with no dependency on
-Claude Code, so the weekly triage keeps running after whoever built it
-moves on.
+A Google Apps Script + Gemini system that keeps the Legal Tracker
+Airtable base's case activity up to date by watching a shared mailbox for
+case-related email. It's designed to run unattended, under a shared
+Google Workspace account (`litigation@gopuff.com`), with everything it
+needs — credentials, schedule, table names — configured through Script
+Properties rather than code.
 
-Gmail only (no Slack). Two independent weekly jobs run out of this one
-project: `main` drafts new Update Matches rows from recent email, and
-`runCleanup` deletes rows that have already been reviewed and are done
-with — see below for both.
+Two independent weekly jobs run out of this one project:
+
+- **`main`** reads recent email, matches it to cases, and drafts new rows
+  in Airtable's Update Matches table for a human to review.
+- **`runCleanup`** deletes Update Matches rows once they've been reviewed
+  and are done with — silently, in the background.
 
 ## How it works, in plain English
 
@@ -58,17 +61,17 @@ assignment, and whether anything went wrong.
 If something breaks along the way — Gmail is unreachable, Airtable
 rejects a write, a table or field got renamed in Airtable — the script
 stops itself rather than pushing ahead with a guess, and always sends an
-email explaining what happened. You should get an email every time it
+email explaining what happened. You should get an email every time `main`
 runs, whether or not anything new was found.
 
 ## How Update Matches and Case Activity fit together
 
 These two Airtable tables work together as a **draft-then-approve**
-pipeline. This script only ever touches the first one.
+pipeline. `main` only ever writes to the first one.
 
-**Update Matches is the review queue.** Every row here is a draft the
-script (or a person) proposed — nothing in this table is official until a
-human signs off on it. The fields that matter:
+**Update Matches is the review queue.** Every row here is a draft `main`
+proposed — nothing in this table is official until a human signs off on
+it. The fields that matter:
 
 - **Case** — which case this relates to, if the match was confident
   enough to link one. Can be blank.
@@ -80,8 +83,8 @@ human signs off on it. The fields that matter:
   Case is linked), `Low Confidence` (a weak guess — Case is deliberately
   left blank), or `No Confidence` (either several cases are plausible, in
   which case all of them are linked, or none could be identified at all).
-- **Author** — who/what is credited with the entry (for this script, the
-  automated author record you set up — see the setup steps below).
+- **Author** — who/what is credited with the entry (the automated author
+  record you set up — see the setup steps below).
 - **Approved** — blank until a human reviews it. This is the field *you*
   set by hand: mark it `Approved` to accept the draft as real, or
   `Not Approved` to reject it.
@@ -90,9 +93,9 @@ human signs off on it. The fields that matter:
   to touch this yourself.
 
 **Case Activity is the permanent record** — the real, official history for
-each case. This script never writes to it directly, and neither should
-you type into it by hand for anything that came through Update Matches;
-the copy happens automatically.
+each case. Nothing in this project writes to it directly, and neither
+should you type into it by hand for anything that came through Update
+Matches; the copy happens automatically.
 
 **The connection between them is an Airtable Automation** (called
 "Promotion", configured inside Airtable itself — nothing to do with this
@@ -108,18 +111,17 @@ that happens it:
 It does **not** delete the Update Matches row — that row just sits there
 with `Approved` = `Approved` and `Promoted` = checked. Marking a row
 `Not Approved` does the opposite: nothing gets copied anywhere, and the
-row also just sits there, unless something else cleans it up (see below).
+row also just sits there, unless something cleans it up.
 
-**A second job, `runCleanup`, deletes rows once they're done with.** It
-runs on its own weekly schedule (Sunday evening by default) and does two
-things, silently:
+**That's `runCleanup`'s job.** It runs on its own weekly schedule (Sunday
+evening by default) and does two things, silently:
 
 - Deletes a `Not Approved` row once its `Activity Date` is at least
   `CLEANUP_NOT_APPROVED_AGE_DAYS` (default 21) days old. That margin
-  matters: the weekly triage job re-scans the last two weeks of mail every
-  time it runs, so a rejected row younger than that could still be inside
-  a future scan window and get logged right back in if deleted too soon.
-  A `Not Approved` row younger than the cutoff is left alone — it'll get
+  matters: `main` re-scans the last two weeks of mail every time it runs,
+  so a rejected row younger than that could still be inside a future scan
+  window and get logged right back in if deleted too soon. A
+  `Not Approved` row younger than the cutoff is left alone — it'll get
   picked up by a later cleanup run once it's safely aged out.
 - Deletes an `Approved` row once it's confirmed present in Case Activity
   (i.e. `Promoted` would show checked) — never by age. An `Approved` row
@@ -131,25 +133,13 @@ things, silently:
 `runCleanup` sends **no email on a normal run** — it's meant to just
 happen in the background. If something goes wrong (Airtable unreachable,
 a table/field renamed), it still emails `SUMMARY_EMAIL` with the specific
-error, same fail-closed pattern as `main`. To confirm it's actually
-running and see what it deleted on a given week, check the Apps Script
-project's **Executions** log (it logs a one-line summary every run).
-
-This replaces the *cleanup* half of a separate Claude Code routine,
-`legal-tracker-triage-review`, that this repo also has. It does **not**
-replace that routine's other half — clustering why rows get rejected or
-approved into recurring patterns, and proposing rule changes as pull
-requests — which isn't ported here on purpose: `legal-tracker-triage` now
-runs weekly instead of daily, so a single Update Matches row can
-synthesize several distinct messages into one `Entry`, and the clean
-one-event-per-row signal that pattern-learning depended on doesn't exist
-anymore. There's also no longer a Claude prompt file for a proposed rule
-to edit. If you want that kind of trend-watching back in some form, it'd
-need a different design, not a straight port.
+error. To confirm it's actually running and see what it deleted on a
+given week, check the Apps Script project's **Executions** log (it logs a
+one-line summary every run).
 
 ## Maintaining & troubleshooting
 
-**You should get an email from this script every time it runs**, sent to
+**You should get an email from `main` every time it runs**, sent to
 whatever `SUMMARY_EMAIL` is set to. Start there:
 
 - **Subject says COMPLETE** — normal run. Lists what was added (if
@@ -181,8 +171,8 @@ it ran and see what it deleted.
 | Nothing new shows up for weeks, but you know there's been case email | The `!update` Gmail label may be missing from `litigation@gopuff.com`, or the mail isn't reaching that mailbox at all, or the relevant case isn't in the Cases table as Active | Check the label exists; check the mailbox is actually receiving that correspondence; check the case's Status in Airtable |
 | A row shows up with the wrong case linked | The AI misjudged a Medium Confidence match | Just correct it during review — mark `Not Approved`, or manually fix the Case field before marking `Approved`. This is exactly what the human review step is for |
 | Rows keep piling up in Update Matches even after you've reviewed them | Either the `runCleanup` trigger isn't installed, or the rows are `Approved` but haven't actually been promoted yet (check `Promoted` on the row and whether Case Activity has a matching entry) | Check **Triggers** for `runCleanup`; re-run `installCleanupTrigger` if missing. A pending-Approved row is left alone by design until it's promoted — that's not a bug |
-| `Not Approved` rows aren't disappearing even after weeks | Working as intended if younger than `CLEANUP_NOT_APPROVED_AGE_DAYS` (default 21) — they need to age out of the triage job's own scan window first | Wait it out, or lower `CLEANUP_NOT_APPROVED_AGE_DAYS` if you're confident the triage window is narrower than that |
-| Script seems to have silently stopped running entirely | The weekly trigger was deleted, or the Airtable/Gemini API key expired or was revoked | In the Apps Script editor, check **Triggers** (left sidebar) for a trigger on `main` and on `runCleanup`; re-run `installWeeklyTrigger`/`installCleanupTrigger` if either is missing. Check Script Properties for expired keys |
+| `Not Approved` rows aren't disappearing even after weeks | Working as intended if younger than `CLEANUP_NOT_APPROVED_AGE_DAYS` (default 21) — they need to age out of `main`'s own scan window first | Wait it out, or lower `CLEANUP_NOT_APPROVED_AGE_DAYS` if you're confident the scan window is narrower than that |
+| A job seems to have silently stopped running entirely | Its trigger was deleted, or the Airtable/Gemini API key expired or was revoked | In the Apps Script editor, check **Triggers** (left sidebar) for a trigger on `main` and on `runCleanup`; re-run `installWeeklyTrigger`/`installCleanupTrigger` if either is missing. Check Script Properties for expired keys |
 
 **To change how it runs:** every setting lives in Script Properties
 (Project Settings -> Script Properties in the Apps Script editor) — see
@@ -191,43 +181,42 @@ the full list in the setup section below and in the comment at the top of
 length, which email address gets the summary, the trigger day/time, which
 Airtable base/tables it points at, and so on are all properties.
 
-**To pause it temporarily:** open **Triggers** in the Apps Script editor
-and delete the trigger on `main` (or just disable/pause it). Re-run
-`installWeeklyTrigger` from the editor whenever you want it back.
+**To pause a job temporarily:** open **Triggers** in the Apps Script
+editor and delete the trigger on `main` or `runCleanup` (or just disable
+it). Re-run `installWeeklyTrigger`/`installCleanupTrigger` from the
+editor whenever you want it back.
 
 **To test a change safely:** set the `DRY_RUN` Script Property to `true`
-and run `main` manually from the editor. It runs the full pipeline —
-reads Gmail, calls Gemini, checks Airtable — but only logs what it would
-have written instead of actually writing it, and still sends you the
-summary email so you can see the results. Set it back to `false` when
-you're satisfied.
+and run `main` (or `runCleanup`) manually from the editor. It runs the
+full pipeline — reads Gmail, calls Gemini, checks Airtable — but only
+logs what it would have written or deleted instead of actually doing it.
+`main` still sends its summary email so you can see the results; set
+`DRY_RUN` back to `false` once satisfied.
 
 ## First-time setup, in order
 
 1. **Create the Apps Script project under `litigation@gopuff.com` itself**
-   (not your personal account) — script.google.com, signed in as that
-   account, "New project". This makes `GmailApp`/`MailApp` inside the
-   script operate as that mailbox, and means the project's ownership,
-   triggers, and Script Properties all live with the account that's meant
-   to outlive this handoff.
+   — script.google.com, signed in as that account, "New project". This
+   makes `GmailApp`/`MailApp` inside the script operate as that mailbox,
+   and means the project's ownership, triggers, and Script Properties all
+   live with that account rather than any individual person's.
 
 2. **Copy in the files.** Paste `Code.gs` into the default `Code.gs` file in
    the editor, and replace the contents of `appsscript.json` (View ->
    Show manifest file) with this directory's `appsscript.json`.
 
-3. **Create the `!update` Gmail label** in `litigation@gopuff.com` itself —
-   it does not carry over from any other mailbox. The script skips that
-   sweep tier (and says so in its summary email) if the label doesn't
-   exist, rather than failing the whole run.
+3. **Create the `!update` Gmail label** in `litigation@gopuff.com` itself.
+   `main` skips that sweep tier (and says so in its summary email) if the
+   label doesn't exist, rather than failing the whole run.
 
 4. **Add an Internal Owners record for this script to link as Author.**
    Every Update Matches/Case Activity row's Author field is a linked
    record into Airtable's `Internal Owners` table, not free text. Add a
    new row there — a generic name like `Litigation Tracker (Automated)`
-   is recommended, rather than any individual person's name, so it
-   doesn't need updating again the next time this handoff repeats. The
-   script refuses to run without `AUTHOR_OWNER_NAME` explicitly set (see
-   below) specifically so it never silently falls back to someone's name.
+   is recommended, rather than any individual person's name, so it never
+   needs updating as staffing changes. `main` refuses to run without
+   `AUTHOR_OWNER_NAME` explicitly set (see below) specifically so it never
+   silently falls back to someone's name.
 
 5. **Get an Airtable Personal Access Token** scoped to the Legal Tracker
    base (`appFIB9fJCzTeFDcG`) only, with `data.records:read`,
@@ -239,7 +228,8 @@ you're satisfied.
    `runCleanup` delete them. The thing actually preventing a delete
    anywhere it shouldn't happen is the code-level allowlist in
    `deleteRecords_` (`Code.gs`), restricted to the Update Matches table
-   only — same pattern as the write allowlist for creates.
+   only — same pattern as the write allowlist for creates in
+   `createRecords_`.
 
 6. **Get a Gemini API key** (default model: `gemini-2.5-flash`).
 
@@ -265,7 +255,7 @@ you're satisfied.
    | `REVIEW_WINDOW_DAYS` | no | default `14` |
    | `MAX_RUNTIME_MINUTES` | no | default `25` |
    | `UPDATE_LABEL_NAME` | no | default `!update` |
-   | `DRY_RUN` | no | default `false` — set `true` to log intended writes instead of calling Airtable's create endpoints, while still running the full match/classify pipeline and sending the summary email |
+   | `DRY_RUN` | no | default `false` — set `true` to log intended writes/deletes instead of calling Airtable, while `main` still runs its full match/classify pipeline and sends the summary email |
    | `TRIGGER_WEEKDAY` | no | default `SATURDAY` — read only by `installWeeklyTrigger` (step 10), any day name `MONDAY`..`SUNDAY` |
    | `TRIGGER_HOUR` | no | default `7` — read only by `installWeeklyTrigger`, 0-23 in `America/New_York` |
    | `CLEANUP_NOT_APPROVED_AGE_DAYS` | no | default `21` — how old a `Not Approved` row's Activity Date must be before `runCleanup` deletes it |
@@ -286,19 +276,16 @@ you're satisfied.
    creating triggers). Approve as `litigation@gopuff.com`.
 
 9. **Dry-run it.** With `DRY_RUN=true`, run `main` and read the summary
-   email that lands in `legal@gopuff.com` — it lists what would have been
-   written, with the same COMPLETE/INCOMPLETE status the live routine
-   uses. Compare a few entries against what you'd expect. Flip
-   `DRY_RUN` to `false` once satisfied.
+   email — it lists what would have been written, with a
+   COMPLETE/INCOMPLETE status. Compare a few entries against what you'd
+   expect. Flip `DRY_RUN` to `false` once satisfied.
 
 10. **Install the weekly triage trigger.** Run `installWeeklyTrigger` once
     from the editor — it schedules `main` for `TRIGGER_WEEKDAY` at
     `TRIGGER_HOUR` in `America/New_York` (the script's declared `timeZone`
     in `appsscript.json`; defaults to Saturday 7am if those properties
-    aren't set), and Apps Script's own trigger DST handling means this
-    doesn't need the separate UTC-cron DST correction the Claude Code
-    routine's live trigger does. Re-running `installWeeklyTrigger` is
-    always safe — it clears any prior trigger on `main` first, so changing
+    aren't set). Re-running `installWeeklyTrigger` is always safe — it
+    clears any prior trigger on `main` first, so changing
     `TRIGGER_WEEKDAY`/`TRIGGER_HOUR` later just means re-running it.
 
 11. **Install the weekly cleanup trigger.** Run `installCleanupTrigger`
@@ -309,19 +296,23 @@ you're satisfied.
     trusting it unattended — check the Executions log for its one-line
     summary, since it doesn't email on success.
 
-## What isn't carried over from the Claude Code routine
+## Security notes
 
-- **Slack.** No Slack search, no Slack summary. All matching is Gmail-only;
-  reporting is email to `SUMMARY_EMAIL`.
-- **The airtable-mcp proxy's server-enforced write scoping.** This script
-  holds `AIRTABLE_API_KEY` directly and calls Airtable's REST API itself.
-  The allowlist check inside `createRecords_` in `Code.gs` is the only
-  thing stopping a write to a table other than Update Matches/Thread
-  Matches — there is no server-side backstop the way there is behind
-  `mcp-servers/airtable-mcp`. Scoping the PAT itself (step 5) is a partial
-  mitigation, not a replacement for that backstop.
-- **The pattern-learning/rule-proposal half of `legal-tracker-triage-review`.**
-  `runCleanup` (above) covers that routine's housekeeping, but not its
-  clustering of rejection/approval reasons or its GitHub PRs proposing
-  rule changes — see the note above on why that part doesn't translate
-  once triage runs weekly instead of daily.
+- **Email content is treated as data, never as instructions.** Anyone who
+  can send mail to `litigation@gopuff.com` can write whatever they want in
+  the body — the Gemini prompts in `classifyAndSummarize_` explicitly
+  instruct the model to summarize and classify email content, never to
+  follow directions found inside it.
+- **A case can only ever be linked by matching a real Airtable record
+  ID** — never a name typed in as text. Every Airtable write is sent with
+  `typecast:false`, so an unrecognized value in a linked-record field
+  fails loudly instead of silently creating a spurious new Cases/Internal
+  Owners record.
+- **Write and delete access is restricted in code, not just by the
+  Airtable token's scope.** `createRecords_` will only ever POST to
+  Update Matches or Thread Matches; `deleteRecords_` will only ever DELETE
+  from Update Matches. Both allowlists are hardcoded checks inside
+  `Code.gs`, independent of what the `TABLE_*` Script Properties are set
+  to — there is no other backstop preventing a write or delete to the
+  wrong table if that code path were ever bypassed, so treat those two
+  checks as load-bearing.
