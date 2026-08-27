@@ -58,7 +58,9 @@ Every match becomes a new **draft row in the Update Matches table** — the
 script never writes directly to the permanent case record. A weekly (or
 however often it runs) summary email goes to whoever's set as
 `SUMMARY_EMAIL`, listing what was added, what needs manual case
-assignment, and whether anything went wrong.
+assignment, and whether anything went wrong — with a link to this
+document at the bottom (`README_URL`) for anyone who wants to know how
+it actually works.
 
 If something breaks along the way — Gmail is unreachable, Airtable
 rejects a write, a table or field got renamed in Airtable — the script
@@ -310,6 +312,7 @@ logs what it would have written or deleted instead of actually doing it.
    | `CLEANUP_NOT_APPROVED_AGE_DAYS` | no | default `21` — how old a `Not Approved` row's Activity Date must be before `runCleanup` deletes it |
    | `CLEANUP_TRIGGER_WEEKDAY` | no | default `SUNDAY` — read only by `installCleanupTrigger` (step 11) |
    | `CLEANUP_TRIGGER_HOUR` | no | default `20` — read only by `installCleanupTrigger`, 0-23 in `America/New_York` |
+   | `README_URL` | no | default points at this document's Google Drive copy — linked as "Readme" at the bottom of every summary email |
 
    If you rename a table in Airtable, renaming the matching
    `TABLE_*` property here is the only change needed — no code edit. The

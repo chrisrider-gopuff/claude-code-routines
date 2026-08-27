@@ -122,6 +122,9 @@
 //                                         thread — see runCleanup())
 //   CLEANUP_TRIGGER_WEEKDAY   SUNDAY  — used only by installCleanupTrigger()
 //   CLEANUP_TRIGGER_HOUR      20      — 0-23, script's timeZone
+//   README_URL   https://drive.google.com/file/d/16bQu9QFKqt-U96PBDV8mfHGK3GtQhaCZ/view?usp=sharing
+//                — linked as "Readme" at the bottom of main()'s summary
+//                  email (sendSummaryEmail_). Update this if the doc moves.
 //
 // Table-level field names expected in each table, checked live at the
 // start of every run (see verifySchema_) — not a Script Property, since
@@ -369,7 +372,9 @@ function getConfig_() {
     maxRuntimeMinutes: parseInt(p.getProperty('MAX_RUNTIME_MINUTES') || '25', 10),
     updateLabelName: p.getProperty('UPDATE_LABEL_NAME') || '!update',
     dryRun: (p.getProperty('DRY_RUN') || 'false').toLowerCase() === 'true',
-    cleanupNotApprovedAgeDays: parseInt(p.getProperty('CLEANUP_NOT_APPROVED_AGE_DAYS') || '21', 10)
+    cleanupNotApprovedAgeDays: parseInt(p.getProperty('CLEANUP_NOT_APPROVED_AGE_DAYS') || '21', 10),
+    readmeUrl: p.getProperty('README_URL') ||
+      'https://drive.google.com/file/d/16bQu9QFKqt-U96PBDV8mfHGK3GtQhaCZ/view?usp=sharing'
   };
 }
 
@@ -884,33 +889,49 @@ function sendSummaryEmail_(cfg, status, results, errors) {
   var subject = 'Weekly Case Activity Triage — ' + (isComplete ? 'COMPLETE' : 'INCOMPLETE') + ' — ' + today +
     (cfg.dryRun ? ' [DRY RUN]' : '');
 
+  // Plain-text lines and their HTML-escaped equivalents are built in
+  // lockstep so the two bodies below never drift apart. Escaping matters
+  // here specifically because subject lines and error text can contain
+  // content pulled from swept email — never trust it unescaped in the
+  // HTML body.
   var lines = [];
+  var htmlLines = [];
+  function addLine(text) {
+    lines.push(text);
+    htmlLines.push(escapeHtml_(text));
+  }
+
   if (!isComplete) {
-    lines.push('Some searches or matches did not complete cleanly:');
-    status.notes.forEach(function (n) { lines.push('- ' + n); });
-    errors.forEach(function (e) { lines.push('- Thread "' + e.subject + '": ' + e.error); });
-    lines.push('');
+    addLine('Some searches or matches did not complete cleanly:');
+    status.notes.forEach(function (n) { addLine('- ' + n); });
+    errors.forEach(function (e) { addLine('- Thread "' + e.subject + '": ' + e.error); });
+    addLine('');
   }
 
   if (results.length) {
-    lines.push(results.length + ' new draft entr' + (results.length === 1 ? 'y' : 'ies') + ' ' +
+    addLine(results.length + ' new draft entr' + (results.length === 1 ? 'y' : 'ies') + ' ' +
       (cfg.dryRun ? 'would be added' : 'added') + ' to Update Matches:');
     results.forEach(function (r) {
       var label = r.matterNames.length ? r.matterNames.join(', ') : (r.manualAssignment ? '[needs manual case assignment]' : '[unmatched]');
-      lines.push('- ' + label + ' — ' + r.subject + ' (' + r.confidence + ')');
+      addLine('- ' + label + ' — ' + r.subject + ' (' + r.confidence + ')');
     });
   } else {
-    lines.push('No new case-related activity found. Update Matches unchanged.');
+    addLine('No new case-related activity found. Update Matches unchanged.');
   }
 
   var manual = results.filter(function (r) { return r.manualAssignment; });
   if (manual.length) {
-    lines.push('');
-    lines.push('!update-labeled threads needing manual case assignment:');
-    manual.forEach(function (r) { lines.push('- ' + r.subject); });
+    addLine('');
+    addLine('!update-labeled threads needing manual case assignment:');
+    manual.forEach(function (r) { addLine('- ' + r.subject); });
   }
 
-  MailApp.sendEmail({ to: cfg.summaryEmail, subject: subject, body: lines.join('\n') });
+  var plainBody = lines.join('\n') +
+    '\n\nCurious how this script works? Read the Readme: ' + cfg.readmeUrl;
+  var htmlBody = htmlLines.join('<br>') +
+    '<br><br>Curious how this script works? Read the <a href="' + escapeHtml_(cfg.readmeUrl) + '">Readme</a>!';
+
+  MailApp.sendEmail({ to: cfg.summaryEmail, subject: subject, body: plainBody, htmlBody: htmlBody });
 }
 
 function sendFailureEmail_(cfg, title, detail) {
@@ -964,6 +985,15 @@ function uniq_(arr) {
     seen[x] = true;
     return true;
   });
+}
+
+function escapeHtml_(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function truncate_(s, n) {
