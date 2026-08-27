@@ -64,6 +64,8 @@ A Thread Matches table caches thread→case matches so repeat runs skip re-match
 
 **Required environment:** none.
 
+**Standalone successor:** `apps-script/legal-tracker-triage-gas/` is a Gmail-only Apps Script + Gemini reimplementation of this routine, built to run under a shared `litigation@gopuff.com` account with no Claude Code dependency, for continuity once Chris is no longer running these routines. It is not wired up as the live weekly trigger yet — see that directory's README for setup and rollout. Once it's live, this routine's own trigger should be disabled to avoid both writing duplicate Update Matches rows for the same activity.
+
 ### legal-tracker-triage-review
 
 **Schedule:** Weekly, Sunday at 8:00 PM Eastern (America/New_York) — placeholder, adjust to preference
@@ -218,6 +220,49 @@ token, are preserved as a worked example in
 `mcp-servers/airtable-mcp/README.md` even though no current routine reads
 them — useful if this base (or a new one) ever needs a proxied deployment
 again.
+
+## Apps Script standalone implementations
+
+### legal-tracker-triage-gas
+
+**Code:** `apps-script/legal-tracker-triage-gas/Code.gs`, `appsscript.json`
+**Setup/rollout:** `apps-script/legal-tracker-triage-gas/README.md`
+
+A Gmail-only reimplementation of the `legal-tracker-triage` routine (see
+above) as a self-contained Google Apps Script project, built for
+continuity after Chris stops running these routines. Unlike everything
+else in this repo, it does not run as a Claude Code routine at all — no
+`prompt.md`, no `schedule.yaml`, no MCP connectors. It's meant to be
+deployed under a shared Google Workspace account, `litigation@gopuff.com`,
+which also becomes the standing point of contact for case correspondence
+going forward, and scheduled via Apps Script's own time-based triggers
+(`installWeeklyTrigger` in `Code.gs`).
+
+Differences from the Claude Code routine, in brief (full rationale in
+`Code.gs`'s header comment):
+
+- **Gmail only** — no Slack search, no Slack summary. Reporting is email
+  (`MailApp`) to a distribution list (`legal@gopuff.com` by default) instead
+  of `#tracker-updates`.
+- **Airtable access is direct REST with its own API key**, not the native
+  connector and not the `airtable-mcp` proxy — there is no server-side
+  backstop on writes here (see `mcp-servers/airtable-mcp` below for what
+  that would look like); `WRITE_TABLE_ALLOWLIST` in `Code.gs` is the only
+  thing enforcing the Update Matches/Thread Matches-only write rule.
+- **Gemini (`gemini-2.5-flash` by default) replaces Claude's reasoning**
+  for the judgment calls — match confidence, drafting the `Entry` text,
+  and resisting prompt injection in swept email content — via narrow,
+  schema-constrained calls. Candidate case matching itself stays
+  deterministic code (mirrors the routine's own (a)-(d) rules), and
+  Gemini's output is re-validated against the real candidate ID list
+  before anything is written.
+- **GmailApp gives full thread bodies natively**, so the search-preview
+  truncation workaround in the Claude Code routine's Step 3 isn't needed
+  here.
+
+Not yet wired up as the live weekly trigger — see the README's setup and
+dry-run steps before cutting over from `legal-tracker-triage`'s own
+schedule.
 
 ## Skills
 
