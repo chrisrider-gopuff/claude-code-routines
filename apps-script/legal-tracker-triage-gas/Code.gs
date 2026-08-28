@@ -757,17 +757,22 @@ function classifyAndSummarize_(cfg, messages, signal, context, hasUpdateLabel) {
     required: ['matchConfidence', 'matchedCaseIds', 'entryText']
   };
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + cfg.geminiModel +
-    ':generateContent?key=' + cfg.geminiApiKey;
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + cfg.geminiModel + ':generateContent';
   var payload = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0.1 }
   };
 
   var data = withRetry_(function () {
+    // The key goes in a header, not a "?key=" query param, so it never ends
+    // up embedded in the URL that a transport-level UrlFetchApp exception
+    // (timeout, DNS failure, etc. — not caught by muteHttpExceptions, which
+    // only covers HTTP error status codes) would otherwise echo back into
+    // errors[] and, from there, into the weekly summary email.
     var resp = UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
+      headers: { 'x-goog-api-key': cfg.geminiApiKey },
       payload: JSON.stringify(payload),
       muteHttpExceptions: true
     });
@@ -809,10 +814,17 @@ function processThread_(cfg, context, thread, windowStart, windowEnd, results) {
 
   var signal, classification, isNewlyMatched;
   if (cached) {
-    signal = { signalType: 'cached', candidateIds: cached.caseIds };
+    // cached.caseIds was valid against the Cases table when this Thread
+    // Matches row was written, but that table can change afterward (a case
+    // record deleted outright, not just its Status changed) — re-check
+    // against the live context here rather than trusting a possibly-stale
+    // ID straight into the Case link field, which createRecords_ would
+    // otherwise send with typecast:false and fail the whole row on.
+    var validCachedIds = cached.caseIds.filter(function (id) { return context.allCasesById[id]; });
+    signal = { signalType: 'cached', candidateIds: validCachedIds };
     classification = classifyAndSummarize_(cfg, messages, signal, context, hasUpdateLabel);
-    classification.matchedCaseIds = cached.caseIds; // trust the cache over a fresh re-guess
-    classification.matchConfidence = cached.caseIds.length ? 'Medium Confidence' : 'No Confidence';
+    classification.matchedCaseIds = validCachedIds; // trust the cache over a fresh re-guess
+    classification.matchConfidence = validCachedIds.length ? 'Medium Confidence' : 'No Confidence';
     isNewlyMatched = false;
   } else {
     var deterministic = detectSignal_(messages, context);
