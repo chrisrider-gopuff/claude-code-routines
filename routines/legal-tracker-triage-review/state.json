@@ -1,0 +1,86 @@
+{
+  "rejectionPatterns": [],
+  "approvalPatterns": [
+    {
+      "id": "settlement-figure-or-deadline",
+      "description": "Entry mentions an explicit settlement dollar figure or a hard deadline (demand, offer, executed agreement, payment)",
+      "cumulativeCount": 9,
+      "examples": [
+        "Matter fully resolved -- parties reached a settlement in principle on 7/28 ($14,000 to Manning Law, APC) to resolve the CIPA claim without filing suit.",
+        "Claimant John Cook's settlement demand received with 30-day expiration (Sept 24, 2026); meeting scheduled with Baumann counsel to discuss",
+        "Wage claim settlement negotiated with claimant's counsel: $4,123.08 to claimant plus $1,000 attorney fee to Matzkin Law LLC, releasing all wage claims."
+      ],
+      "lastSeenDate": "2026-08-26",
+      "proposedPrUrl": null
+    },
+    {
+      "id": "new-complaint-or-service",
+      "description": "New complaint, claim, or service of process/removal received (case-opening or new-exposure event)",
+      "cumulativeCount": 5,
+      "examples": [
+        "Complaint filed in Camden Superior Court. Claimant alleges disability discrimination and failure to accommodate...",
+        "McMichael v. GoPuff removal documents received; notice of removal and certificate of interested parties attached",
+        "GBLogistics received Wisconsin Department of Revenue notice regarding $31k delinquent UC balance"
+      ],
+      "lastSeenDate": "2026-08-26",
+      "proposedPrUrl": null
+    },
+    {
+      "id": "discovery-deposition-coordination",
+      "description": "Discovery, deposition, or witness-prep coordination that substantively advances the case",
+      "cumulativeCount": 6,
+      "examples": [
+        "Outside counsel finalized talking points and a document-collection questionnaire for the DC AG business-record collection...",
+        "Faegre Drinker (outside counsel) and Gopuff coordinated fact-witness interviews on driver compensation/offer-technology...",
+        "Chris directed the scope/cost of the mediation data analysis (targeting roughly $5k). Counsel identified salaried and out-of-state employees improperly included..."
+      ],
+      "lastSeenDate": "2026-08-26",
+      "proposedPrUrl": null
+    },
+    {
+      "id": "court-ruling-or-order",
+      "description": "A court issued a ruling or order on a pending motion",
+      "cumulativeCount": 2,
+      "examples": [
+        "Gopuff's demurrer briefing completed... the court issued a tentative order sustaining the demurrer as to all causes of action with leave to amend.",
+        "Court reversed tentative on demurrer issue not expressly raised in briefing; GtLaw counsel reports bad news on Quinn/BevMo matter."
+      ],
+      "lastSeenDate": "2026-08-26",
+      "proposedPrUrl": null
+    },
+    {
+      "id": "arbitration-motion-procedural",
+      "description": "Arbitration agreement or motion procedural step confirmed",
+      "cumulativeCount": 2,
+      "examples": [
+        "Chris and Nat completed review of outside counsel's draft Motion to Compel Arbitration and approved it ahead of the filing deadline.",
+        "Opposing counsel (BIPC) confirms plaintiff agreed, after negotiation, to submit the matter to arbitration; paperwork to be prepared and filed with the court."
+      ],
+      "lastSeenDate": "2026-08-21",
+      "proposedPrUrl": null
+    },
+    {
+      "id": "status-checkin-or-scheduling",
+      "description": "Internal status check-in, follow-up, or scheduling update with no hard deliverable yet reached",
+      "cumulativeCount": 7,
+      "examples": [
+        "Foley Hoag (Anderson, Kerner) reported meeting with the MA AGO's office on the ongoing investigation...",
+        "Settlement negotiations failed; plaintiff unreasonable; case needs representation; case management conference memo due 8/27.",
+        "Inhouse counsel inquires about trial timeline for Third Avenue Commons matter"
+      ],
+      "lastSeenDate": "2026-08-26",
+      "proposedPrUrl": null
+    },
+    {
+      "id": "manual-flag-automatic-match-miss",
+      "description": "Chris manually flagged a Gmail thread as case-related that automatic Gmail/Slack matching did not catch on its own (Entry Type 'Claude', not 'Email') -- a potential matching-rule gap to watch, not yet a pattern",
+      "cumulativeCount": 1,
+      "examples": [
+        "Gmail thread flagged by Chris Rider as related to the Lawrence Terry matter."
+      ],
+      "lastSeenDate": "2026-08-27",
+      "proposedPrUrl": null
+    }
+  ],
+  "lastRunDate": "2026-09-01"
+}
