@@ -1,14 +1,4 @@
 {
-  "snoozed": [
-    {
-      "matter": "EEOC Calvin Overstreet Mediation",
-      "summary": "Mediation occurring 8/28; awaiting Truncellito's outcome update",
-      "sourceLinks": ["https://mail.google.com/mail/u/0/#inbox/19f945ef28a28995"],
-      "category": "monitoring",
-      "note": "Happening 8/28. drop until 3 days before.",
-      "snoozedOn": "2026-07-27",
-      "resurfaceDate": "2026-08-25"
-    }
-  ],
+  "snoozed": [],
   "extended": []
 }
